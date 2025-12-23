@@ -1,0 +1,240 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+
+model Account {
+  id                       String   @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String?  @db.Text
+  access_token             String?  @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String?  @db.Text
+  session_state            String?
+  refresh_token_expires_in Int?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model User {
+  id            String             @id @default(cuid())
+  email         String             @unique
+  name          String?
+  image         String?
+  password      String?
+  emailVerified DateTime?
+
+  role          Role               @default(USER)
+
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  resetToken        String?  // Optional, stores token
+  resetTokenExpiry  DateTime? // Expiry timestamp
+
+  accounts      Account[]
+  sessions      Session[]
+  workspaces    WorkspaceMember[]
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  createdAt   DateTime @default(now())
+
+  members     WorkspaceMember[]
+  chatbots    Chatbot[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  role        WorkspaceRole @default(MEMBER)
+
+  userId      String
+  workspaceId String
+
+  user        User      @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([userId, workspaceId])
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Chatbot {
+  id              String   @id @default(cuid())
+  name            String
+  image_url       String?
+
+  greeting        String   @default("Hi there! How can I help you today?")
+  description     String?
+  instructions    String?
+
+  model           String
+  temperature     Float
+  max_tokens      Int
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
+
+  messages        Message[]
+  flows           Flow[]
+  knowledgeBases KnowledgeBase[]
+}
+
+enum SenderType {
+  USER
+  BOT
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  chatbotId      String
+  content        String
+  senderType     SenderType
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chatbot       Chatbot @relation(fields: [chatbotId], references: [id])
+}
+
+enum FlowType {
+  INTEND
+  PRODUCT
+  PAGE
+  FAQ
+  SUPPORT
+  CUSTOM
+}
+
+model Flow {
+  id          String   @id @default(cuid())
+  name        String
+  type        FlowType 
+  createdAt   DateTime @default(now())
+
+  chatbotId   String
+  chatbot     Chatbot @relation(fields: [chatbotId], references: [id])
+  nodes       Node[]
+  edges       Edge[]
+}
+
+model Node {
+  id          String   @id @default(cuid())
+  flowId      String
+
+  type        NodeType
+  name        String
+  config      Json     // node-specific config
+  positionX  Float
+  positionY  Float
+
+  createdAt   DateTime @default(now())
+
+  flow        Flow @relation(fields: [flowId], references: [id])
+
+  outgoing    Edge[] @relation("OutgoingEdges")
+  incoming    Edge[] @relation("IncomingEdges")
+
+  @@index([flowId])
+}
+
+model Edge {
+  id          String   @id @default(cuid())
+  flowId      String
+
+  sourceId    String
+  targetId    String
+
+  condition   Json?
+
+  flow        Flow @relation(fields: [flowId], references: [id])
+
+  source      Node @relation("OutgoingEdges", fields: [sourceId], references: [id])
+  target      Node @relation("IncomingEdges", fields: [targetId], references: [id])
+
+  @@index([flowId])
+}
+
+enum NodeType {
+  TRIGGER
+  LLM
+  TOOL
+  CONDITION
+  MEMORY
+  OUTPUT
+}
+
+model KnowledgeBase {
+  id          String   @id @default(cuid())
+  chatbotId   String
+  name        String
+  type        KBType   // PRODUCT, PAGE, FAQ, DOC
+  indexName   String   // vector index name
+  createdAt   DateTime @default(now())
+
+  chatbot     Chatbot  @relation(fields: [chatbotId], references: [id])
+  documents   Document[]
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  knowledgeBaseId String
+  source          String   // url, pdf, product_id
+  content         String
+  metadata        Json
+  createdAt       DateTime @default(now())
+
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id])
+}
+
+enum KBType {
+  PRODUCT
+  PAGE
+  FAQ
+  DOC
+}
+
