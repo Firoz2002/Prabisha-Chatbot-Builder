@@ -51,7 +51,7 @@ export default function EmbedPage() {
   });
 
   // Base URL - you can make this configurable
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http//localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   useEffect(() => {
     fetchChatbot();

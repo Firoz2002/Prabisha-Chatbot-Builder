@@ -3,29 +3,28 @@ import { notFound } from 'next/navigation';
 import ChatbotWidget from '@/components/features/chatbot-widget';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     chatbotId: string;
-  };
+  }>;
 }
 
 export default async function WidgetPage({ params }: PageProps) {
-  const { chatbotId } = params;
+  const { chatbotId } = await params;
 
   try {
-    // Fetch chatbot data
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL}/api/chatbots/${chatbotId}`,
       { cache: 'no-store' }
     );
-    
+
     if (!response.ok) {
       notFound();
     }
-    
+
     const chatbot = await response.json();
-    
-    return <ChatbotWidget chatbot={chatbot} />;
-  } catch (error) {
+
+    return <ChatbotWidget initialChatbotData={chatbot} chatbotId={chatbotId} />;
+  } catch {
     notFound();
   }
 }

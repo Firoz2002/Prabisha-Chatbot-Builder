@@ -2,6 +2,9 @@
 export async function GET() {
   const script = `
 (function() {
+  // Prevent loading if already inside an iframe to avoid recursion
+  if (window.self !== window.top) return;
+
   // Create global chatbot queue
   window.chatbotQueue = window.chatbotQueue || [];
   
@@ -57,6 +60,8 @@ export async function GET() {
     
     // Handle messages from iframe
     window.addEventListener('message', function(event) {
+      if (event.data.chatbotId !== config.chatbotId) return;
+      
       if (event.data.type === 'chatbot-close') {
         closeChatbot(iframe, config);
       } else if (event.data.type === 'chatbot-resize') {
@@ -182,7 +187,7 @@ export async function GET() {
     // Hide launcher button when open
     const button = document.getElementById('chatbot-launcher-' + config.chatbotId);
     if (button) {
-      button.style.opacity = '0.5';
+      button.style.display = 'none';
     }
   }
   
@@ -192,7 +197,7 @@ export async function GET() {
     // Show launcher button when closed
     const button = document.getElementById('chatbot-launcher-' + config.chatbotId);
     if (button) {
-      button.style.opacity = '1';
+      button.style.display = 'flex';
     }
   }
   

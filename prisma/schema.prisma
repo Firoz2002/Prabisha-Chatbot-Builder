@@ -118,6 +118,7 @@ model Chatbot {
   id           String  @id @default(cuid())
   name         String
   description  String?
+  suggestions  Json?
 
   theme        String?
 

@@ -4,7 +4,6 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { SessionProvider } from "@/providers/session-provider";
 import { ThemeProvider } from "next-themes";
-import Script from "next/script";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import GoogleOneTap from "@/components/features/GoogleOneTap";

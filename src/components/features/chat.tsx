@@ -431,7 +431,7 @@ export default function Chat({
             )}
             <div className="flex gap-3">
               {renderAvatarIcon({
-                type: avatar ? "avatar" : "icon",
+                type: "icon",
                 size: avatar ? avatarSize : iconSize,
                 shape: avatar ? getShapeTypeValue(chatbot?.iconShape) : iconShape,
                 border: avatar ? avatarBorder : iconBorder,
