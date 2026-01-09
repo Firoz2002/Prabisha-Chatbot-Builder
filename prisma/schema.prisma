@@ -223,6 +223,9 @@ model Conversation {
   
   // Metadata
   metadata  Json?     // Additional metadata like browser info, location, etc.
+
+  // Summary
+  summary   String?    @db.LongText
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

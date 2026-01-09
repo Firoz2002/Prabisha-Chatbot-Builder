@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Sparkles, Info, Smartphone, Loader2 } from "lucide-react"
+import { Check, Info, Smartphone, Loader2 } from "lucide-react"
 
 import Chat from "@/components/features/chat" 
 
@@ -26,6 +26,8 @@ interface ChatbotData {
 export default function InstructionsPage() {
   const params = useParams()
   const chatbotId = params.id as string
+
+  const [isLoading, setIsLoading] = useState(false);
   
   const [chatbotData, setChatbotData] = useState<ChatbotData | null>(null)
   const [isLoadingChatbot, setIsLoadingChatbot] = useState(true)
@@ -84,19 +86,20 @@ export default function InstructionsPage() {
     }
   }
 
-  const handleSaveChanges = async () => {
+  const handleSave = async () => {
     if (!chatbotData) return
+
+    setIsLoading(true)
     
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("greeting", greeting);
+    formData.append("directive", directive);
+
     try {
       const response = await fetch(`/api/chatbots/${chatbotId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          greeting,
-          directive,
-        }),
+        body: formData,
       })
       
       if (!response.ok) {
@@ -112,6 +115,8 @@ export default function InstructionsPage() {
     } catch (error) {
       console.error("Error saving changes:", error)
       toast.error("Failed to save changes")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -203,12 +208,20 @@ export default function InstructionsPage() {
           </div>
 
           {/* Save Button */}
-          <Button 
-            size="lg" 
-            className="w-full mb-6"
-            onClick={handleSaveChanges}
+          <Button
+            size="lg"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mb-6 font-semibold"
+            onClick={handleSave}
+            disabled={isLoading}
           >
-            Save changes
+            {isLoading ? (
+              "Saving..."
+            ) : (
+              <>
+                <Check className="w-4 h-4 mr-2" />
+                Save Changes
+              </>
+            )}
           </Button>
         </div>
       </div>

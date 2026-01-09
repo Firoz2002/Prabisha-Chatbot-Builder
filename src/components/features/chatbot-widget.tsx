@@ -343,7 +343,7 @@ interface ChatHeaderProps {
 
 function ChatHeader({ onClose, chatbot }: ChatHeaderProps) {
   return (
-    <div className={`bg-${chatbot?.avatarBgColor || "primary"} text-primary-foreground p-4 rounded-t-xl flex justify-between items-center overflow-visible z-10 relative`}>
+    <div className={`bg-primary text-primary-foreground p-4 rounded-t-xl flex justify-between items-center overflow-visible z-10 relative`}>
       <div className="relative flex items-center gap-3">
         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md">
           <Image 
@@ -351,7 +351,7 @@ function ChatHeader({ onClose, chatbot }: ChatHeaderProps) {
             height={48}
             width={48}
             alt={chatbot.name || "Assistant"}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
             unoptimized 
           />
         </div>
