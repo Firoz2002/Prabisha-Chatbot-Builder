@@ -425,7 +425,7 @@ function ChatMessages({
             key={index} 
             className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
           >
-            <div className={`shrink-0 ${msg.role === 'user' ? 'hidden' : ''}`}>
+            <div className={`shrink-0 flex flex-col items-center w-[50px] ${msg.role === 'user' ? 'hidden' : ''}`}>
               <Image 
                 src={chatbot.icon || "/icons/logo1.png"} 
                 height={50} 
@@ -434,7 +434,9 @@ function ChatMessages({
                 className='p-1 rounded-full bg-primary/10 flex items-center justify-center'
               />
 
-              <span>{chatbot.name || "Assistant"}</span>
+              <span className="text-xs text-center break-words w-full leading-tight mt-1">
+                {chatbot.name || "Assistant"}
+              </span>
             </div>
             
             <div className={`${msg.role === 'user' ? 'ml-auto' : ''}`}>

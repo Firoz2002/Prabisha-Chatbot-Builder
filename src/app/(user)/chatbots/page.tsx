@@ -1,8 +1,8 @@
 "use client"
-
+import Image from "next/image"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Bookmark, RotateCcw, Plus, MoreVertical } from "lucide-react"
+import { Search, Bookmark, RotateCcw, Plus, MoreVertical, MessageSquareText, Bot, BookA } from "lucide-react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -44,7 +44,7 @@ type FormValues = z.infer<typeof formSchema>
 interface Chatbot {
   id: string
   name: string
-  image_url?: string | null
+  icon: string
   greeting: string
   description?: string | null
   instructions?: string | null
@@ -54,8 +54,7 @@ interface Chatbot {
   createdAt: string
   updatedAt: string
   _count?: {
-    messages: number
-    flows: number
+    conversations: number
     knowledgeBases: number
   }
 }
@@ -235,15 +234,6 @@ export default function ChatbotsPage() {
   const totalItems = filteredChatbots.length
   const startItem = 1
   const endItem = Math.min(Number.parseInt(itemsPerPage), totalItems)
-
-  const getChatbotIcon = (chatbot: Chatbot) => {
-    if (chatbot.image_url) return "🖼️"
-    
-    if (chatbot.model.includes('gpt-4')) return "🤖"
-    if (chatbot.model.includes('claude')) return "👨‍💼"
-    if (chatbot.model.includes('gemini')) return "💎"
-    return "💬"
-  }
 
   const getModelDisplayName = (model: string) => {
     const modelMap: Record<string, string> = {
@@ -477,7 +467,6 @@ export default function ChatbotsPage() {
               <TableHead>Name</TableHead>
               <TableHead>Conversations</TableHead>
               <TableHead>Model</TableHead>
-              <TableHead>Flows</TableHead>
               <TableHead>Knowledge Bases</TableHead>
               <TableHead>Last modified</TableHead>
               <TableHead className="w-10"></TableHead>
@@ -505,7 +494,7 @@ export default function ChatbotsPage() {
                 <TableRow key={chatbot.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">{getChatbotIcon(chatbot)}</span>
+                      <Image className="h-6 w-6 rounded-full" height={16} width={16} src={chatbot.icon || '/icons/logo1.png'} alt="" />
                       <div className="flex flex-col">
                         <Link href={`/chatbots/${chatbot.id}/instructions`} className="font-medium hover:underline">
                           {chatbot.name}
@@ -520,11 +509,12 @@ export default function ChatbotsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">💬</span>
-                      <span>{chatbot._count?.messages || 0}</span>
+                      <MessageSquareText className="h-4 w-4" />
+                      <span>{chatbot._count?.conversations || 0}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="flex items-center justify-center gap-2">
+                    <Bot className="h-4 w-4" />
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{getModelDisplayName(chatbot.model)}</span>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -535,12 +525,8 @@ export default function ChatbotsPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm">
-                      {chatbot._count?.flows || 0} flow{chatbot._count?.flows !== 1 ? 's' : ''}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
+                    <div className="text-sm flex justify-center gap-2 items-center">
+                      <BookA className="h-4 w-4" />
                       {chatbot._count?.knowledgeBases || 0} KB{chatbot._count?.knowledgeBases !== 1 ? 's' : ''}
                     </div>
                   </TableCell>

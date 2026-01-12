@@ -41,22 +41,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch chatbots (you might want to add workspace relation to chatbot model)
-    // For now, fetching all chatbots - adjust based on your business logic
     const chatbots = await prisma.chatbot.findMany({
       where: {
         workspaceId
       },
-      include: {
-        flows: {
-          take: 1
+      select: {
+        id: true,
+        name: true,
+        model: true,
+        max_tokens: true,
+        temperature: true,
+        createdAt: true,
+        updatedAt: true,
+        icon: true,
+
+        _count: {
+          select: {
+            conversations: true,
+            knowledgeBases: true,
+          },
         },
-        knowledgeBases: {
-          take: 1
-        }
       },
-      orderBy: { createdAt: 'desc' }
     });
+
     return NextResponse.json(chatbots);
   } catch (error) {
     console.error('Error fetching chatbots:', error);

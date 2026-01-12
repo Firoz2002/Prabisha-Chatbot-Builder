@@ -52,7 +52,7 @@ export default function RootLayout({
                   }(window,document,'script','chatbot','http://localhost:3000/embed.js'));
 
                   chatbot('init', {
-                  chatbotId: 'cmjrjloz6000508txklwwvibi',
+                  chatbotId: 'cmk2i4e7e000960tx8749zbnp',
                   baseUrl: 'http://localhost:3000',
                   showButton: true,
                   autoOpen: false,

@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { generateText } from "ai";
-import { createTogetherAI } from '@ai-sdk/togetherai';
-import { searchSimilar } from "@/lib/langchain/vector-store";
-
-const togetherai = createTogetherAI({
-  apiKey: process.env.TOGETHER_AI_API_KEY ?? '',
-});
+import { executeSearchChain, simpleSearch } from "@/lib/langchain/chains/search-chain";
 
 interface RouterParams {
   params: Promise<{ id: string }>;
@@ -24,130 +17,187 @@ export async function POST(
 
     const { 
       input, 
-      conversationId,
+      message,
       prompt, 
       model, 
       temperature, 
-      max_tokens 
+      max_tokens,
+      context: requestContext,
+      conversationId
     } = await request.json();
 
-    // Fetch chatbot with knowledge bases
+    // Use input or message field
+    const userMessage = input || message;
+    if (!userMessage?.trim()) {
+      return NextResponse.json({ error: 'Message required' }, { status: 400 });
+    }
+
+    // Execute the search chain
+    const result = await executeSearchChain({
+      chatbotId: id,
+      conversationId,
+      userMessage,
+    });
+
+    const responseData: any = {
+      message: result.response,
+      response: result.response,
+      conversationId: result.conversationId,
+    };
+
+    // Add request context to response if provided
+    if (requestContext) {
+      responseData.context = requestContext;
+    }
+
+    // Add logic triggers to response if any
+    if (result.triggeredLogics?.length) {
+      responseData.logicTriggers = result.triggeredLogics.map(logic => ({
+        id: logic.id,
+        type: logic.type,
+        name: logic.name,
+        config: logic.config,
+        linkButton: logic.linkButton,
+        meetingSchedule: logic.meetingSchedule,
+        leadCollection: logic.leadCollection
+      }));
+    }
+
+    // Add knowledge context metadata if available (optional)
+    if (result.knowledgeContext) {
+      responseData.metadata = {
+        hasKnowledgeBase: true,
+        knowledgeSources: true
+      };
+    }
+
+    return NextResponse.json(responseData);
+
+  } catch (error: any) {
+    console.error("Error while generating: ", error);
+    
+    let errorMessage = 'Failed to process message';
+    let statusCode = 500;
+    
+    if (error.message?.includes('Chatbot not found')) {
+      errorMessage = 'Chatbot not found';
+      statusCode = 404;
+    } else if (error.message?.includes('API key')) {
+      errorMessage = 'AI service configuration error';
+      statusCode = 503;
+    } else if (error.message?.includes('rate limit')) {
+      errorMessage = 'Rate limit exceeded';
+      statusCode = 429;
+    } else if (error.message?.includes('vector store')) {
+      errorMessage = 'Knowledge base search error';
+      statusCode = 502;
+    }
+    
+    return NextResponse.json(
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+      },
+      { status: statusCode }
+    );
+  }
+}
+
+// Add GET endpoint for simple search without conversation context
+export async function GET(
+  request: NextRequest,
+  context: RouterParams
+) {
+  try {
+    const { id } = await context.params;
+    if (!id) {
+      return new NextResponse("Invalid ID", { status: 400 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const query = searchParams.get('query');
+    const limit = searchParams.get('limit');
+    const threshold = searchParams.get('threshold');
+    const includeKbNames = searchParams.get('includeKbNames');
+
+    if (!query?.trim()) {
+      return NextResponse.json({ error: 'Query required' }, { status: 400 });
+    }
+
+    // Perform simple search (just vector search, no LLM generation)
+    const results = await simpleSearch(id, query, {
+      limit: limit ? parseInt(limit) : 10,
+      threshold: threshold ? parseFloat(threshold) : 0.65,
+      includeKnowledgeBaseNames: includeKbNames === 'true'
+    });
+
+    return NextResponse.json({
+      results,
+      query,
+      chatbotId: id,
+      count: results.length,
+      metadata: {
+        searchType: 'vector-only',
+        hasResults: results.length > 0
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Error while searching: ", error);
+    
+    let errorMessage = 'Failed to perform search';
+    let statusCode = 500;
+    
+    if (error.message?.includes('Chatbot not found')) {
+      errorMessage = 'Chatbot not found';
+      statusCode = 404;
+    } else if (error.message?.includes('vector store')) {
+      errorMessage = 'Knowledge base search error';
+      statusCode = 502;
+    }
+    
+    return NextResponse.json(
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+      },
+      { status: statusCode }
+    );
+  }
+}
+
+// Optional: Add a health check endpoint
+export async function HEAD(
+  request: NextRequest,
+  context: RouterParams
+) {
+  try {
+    const { id } = await context.params;
+    if (!id) {
+      return new NextResponse("Invalid ID", { status: 400 });
+    }
+
+    // Simple check if chatbot exists
+    // Note: We're importing prisma here only for this endpoint
+    const { default: prisma } = await import("@/lib/prisma");
     const chatbot = await prisma.chatbot.findUnique({
       where: { id },
-      include: {
-        knowledgeBases: true,
-      }
+      select: { id: true, name: true }
     });
 
     if (!chatbot) {
       return new NextResponse("Chatbot not found", { status: 404 });
     }
 
-    // Retrieve relevant context from knowledge bases
-    let contextChunks: any[] = [];
-    
-    if (chatbot.knowledgeBases.length > 0) {
-      // Search across all knowledge bases for this chatbot
-      const searchPromises = chatbot.knowledgeBases.map(kb =>
-        searchSimilar({
-          query: input,
-          chatbotId: chatbot.id,
-          knowledgeBaseId: kb.id,
-          limit: 3,
-          threshold: 0.75,
-        }).catch(err => {
-          console.error(`Error searching KB ${kb.name}:`, err);
-          return [];
-        })
-      );
-
-      const results = await Promise.all(searchPromises);
-      contextChunks = results.flat();
-    }
-
-    // Build context string from retrieved chunks
-    const contextString = contextChunks.length > 0
-      ? contextChunks
-          .map((chunk, idx) => `[Context ${idx + 1}]\n${chunk.content}`)
-          .join('\n\n')
-      : '';
-
-    // Fetch conversation history if conversationId provided
-    let conversationHistory = '';
-    if (conversationId) {
-      const messages = await prisma.message.findMany({
-        where: { conversationId },
-        orderBy: { createdAt: 'asc' },
-        take: 10, // Last 10 messages
-      });
-
-      conversationHistory = messages
-        .map(msg => `${msg.senderType}: ${msg.content}`)
-        .join('\n');
-    }
-
-    // Construct enhanced prompt with RAG context
-    const systemPrompt = prompt || chatbot.directive;
-    const enhancedPrompt = `${systemPrompt}
-
-${contextString ? `## Relevant Knowledge:\n${contextString}\n` : ''}
-${conversationHistory ? `## Conversation History:\n${conversationHistory}\n` : ''}
-
-## User Query:
-${input}
-
-Please respond based on the provided knowledge and conversation context. If the answer isn't in the knowledge base, rely on your general knowledge but mention this to the user.`;
-
-    // Generate response
-    const { text } = await generateText({
-      model: togetherai(model || chatbot.model),
-      prompt: enhancedPrompt,
-      temperature: temperature ?? chatbot.temperature,
-      maxOutputTokens: max_tokens ?? chatbot.max_tokens,
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        'X-Chatbot-Name': chatbot.name,
+        'X-Chatbot-Status': 'active',
+      }
     });
-
-    // Save conversation if conversationId provided
-    if (conversationId) {
-      await prisma.$transaction([
-        // Save user message
-        prisma.message.create({
-          data: {
-            content: input,
-            senderType: 'USER',
-            conversationId,
-          }
-        }),
-        // Save bot response
-        prisma.message.create({
-          data: {
-            content: text,
-            senderType: 'BOT',
-            conversationId,
-          }
-        }),
-        // Update conversation timestamp
-        prisma.conversation.update({
-          where: { id: conversationId },
-          data: { updatedAt: new Date() }
-        })
-      ]);
-    }
-
-    return NextResponse.json({
-      message: text,
-      sources: contextChunks.length > 0 ? contextChunks.map(chunk => ({
-        documentId: chunk.documentId,
-        score: chunk.score,
-        metadata: chunk.metadata
-      })) : undefined
-    });
-
   } catch (error) {
-    console.error("Error while generating: ", error);
-    return NextResponse.json({
-      error: "Something went wrong"
-    }, {
-      status: 500
-    });
+    console.error("Health check error: ", error);
+    return new NextResponse("Service unavailable", { status: 503 });
   }
 }
