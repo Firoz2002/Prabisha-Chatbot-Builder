@@ -103,29 +103,41 @@
 
   function createButton() {
     button = document.createElement('div');
+    button.id = 'chatbot-button';
     
+    const iconContainer = document.createElement('div');
+    iconContainer.style.cssText = `
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    `;
+
     if (config.iconUrl) {
       const img = document.createElement('img');
       img.src = config.iconUrl;
       img.alt = 'Chat';
       img.style.cssText = `
-        width: 60%;
-        height: 60%;
+        width: 100%;
+        height: 100%;
         object-fit: cover;
       `;
       
-      // Apply shape
-      if (config.iconShape === 'ROUND') img.style.borderRadius = '50%';
-      else if (config.iconShape === 'ROUNDED_SQUARE') img.style.borderRadius = '12px';
+      const shape = (config.iconShape || '').toUpperCase();
+      if (shape === 'ROUND') img.style.borderRadius = '50%';
+      else if (shape === 'ROUNDED_SQUARE' || shape === 'SQUARE') img.style.borderRadius = '12px';
       
-      // Apply border
-      if (config.iconBorder === 'ROUND') img.style.border = '2px solid currentColor';
-      else if (config.iconBorder === 'ROUNDED_FLAT') img.style.border = '1px solid rgba(255,255,255,0.3)';
+      const border = (config.iconBorder || '').toUpperCase();
+      if (border === 'ROUND') img.style.border = '2px solid currentColor';
+      else if (border === 'ROUNDED_FLAT') img.style.border = '1px solid rgba(255,255,255,0.3)';
       
-      button.appendChild(img);
+      iconContainer.appendChild(img);
     } else {
-      button.innerHTML = '💬';
+      iconContainer.innerHTML = '💬';
     }
+    button.appendChild(iconContainer);
 
     button.style.cssText = `
       position: fixed;
@@ -143,15 +155,21 @@
       font-size: 24px;
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      transition: all 0.3s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       overflow: hidden;
     `;
 
     applyPosition(button, false);
     
     button.onclick = toggleChat;
-    button.onmouseenter = () => button.style.transform = 'scale(1.1)';
-    button.onmouseleave = () => button.style.transform = 'scale(1)';
+    button.onmouseenter = () => {
+      button.style.transform = 'scale(1.1)';
+      button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+    };
+    button.onmouseleave = () => {
+      button.style.transform = 'scale(1)';
+      button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    };
     
     document.body.appendChild(button);
   }
