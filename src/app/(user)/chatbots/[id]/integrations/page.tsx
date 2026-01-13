@@ -1,5 +1,3 @@
-// app/dashboard/chatbots/[chatbotId]/embed/page.tsx
-
 'use client';
 
 import { toast } from 'sonner';
@@ -38,7 +36,8 @@ import {
   Download,
   Zap,
   Shield,
-  AlertCircle
+  AlertCircle,
+  MessageSquare
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -95,16 +94,11 @@ export default function EmbedPage() {
   function generateEmbedCode(stack: TechStack) {
     const { showButton, autoOpen, delay, position, buttonColor, buttonTextColor, buttonSize } = customizations;
     
+    // Simplified config object for better maintainability
+    // Now settings are fetched dynamically from the database in embed.js
     const configObject = `{
   chatbotId: '${chatbotId}',
-  baseUrl: '${baseUrl}',
-  showButton: ${showButton},
-  autoOpen: ${autoOpen},
-  delay: ${delay},
-  position: '${position}',
-  buttonColor: '${buttonColor}',
-  buttonTextColor: '${buttonTextColor}',
-  buttonSize: '${buttonSize}'
+  baseUrl: '${baseUrl}'
 }`;
 
     switch (stack) {
@@ -159,21 +153,36 @@ export default App;`;
       case 'nextjs':
         return `
         // app/layout.tsx or pages/_app.tsx
-        <Script
-          id="chatbot-loader"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: \`
-              (function(w,d,s,o,f,js,fjs){
-                w[o]=w[o]||function(){(w[o].q=w[o].q||[]).push(arguments)};
-                js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
-                js.id=o;js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
-              }(window,document,'script','chatbot','${baseUrl}/embed.js'));
+        import Script from 'next/script'
 
-              chatbot('init', ${configObject});
-            \`
-          }}
-        />
+        export default function RootLayout({
+          children,
+        }: {
+          children: React.ReactNode
+        }) {
+          return (
+            <html lang="en">
+              <body>
+                {children}
+                <Script
+                  id="chatbot-loader"
+                  strategy="afterInteractive"
+                  dangerouslySetInnerHTML={{
+                    __html: \`
+                      (function(w,d,s,o,f,js,fjs){
+                        w[o]=w[o]||function(){(w[o].q=w[o].q||[]).push(arguments)};
+                        js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
+                        js.id=o;js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
+                      }(window,document,'script','chatbot','${baseUrl}/embed.js'));
+
+                      chatbot('init', ${configObject});
+                    \`
+                  }}
+                />
+              </body>
+            </html>
+          )
+        }
 `;
 
       case 'vue':
@@ -418,11 +427,11 @@ add_action('wp_footer', 'add_chatbot_script');
         </svg>
       )
     },
-  { id: 'vue', label: 'Vue.js', icon: '💚' },
-  { id: 'angular', label: 'Angular', icon: '🅰️' },
-  { id: 'wordpress', label: 'WordPress', icon: '📝' },
-  { id: 'shopify', label: 'Shopify', icon: '🛍️' },
-];
+    { id: 'vue', label: 'Vue.js', icon: '💚' },
+    { id: 'angular', label: 'Angular', icon: '🅰️' },
+    { id: 'wordpress', label: 'WordPress', icon: '📝' },
+    { id: 'shopify', label: 'Shopify', icon: '🛍️' },
+  ];
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
@@ -503,6 +512,9 @@ add_action('wp_footer', 'add_chatbot_script');
 
                   <div className="space-y-3">
                     <Label htmlFor="buttonColor">Button Color</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Chatbot icon from settings will be displayed with this background
+                    </p>
                     <div className="flex items-center gap-3">
                       <Input
                         id="buttonColor"
@@ -610,7 +622,7 @@ add_action('wp_footer', 'add_chatbot_script');
                       }`}
                     >
                       <div
-                        className="rounded-full shadow-lg flex items-center justify-center cursor-pointer transition-transform hover:scale-105"
+                        className="rounded-full shadow-lg flex items-center justify-center cursor-pointer transition-transform hover:scale-105 overflow-hidden"
                         style={{
                           backgroundColor: customizations.buttonColor,
                           color: customizations.buttonTextColor,
@@ -620,7 +632,35 @@ add_action('wp_footer', 'add_chatbot_script');
                                  customizations.buttonSize === 'medium' ? '60px' : '70px'
                         }}
                       >
-                        <div className="text-xl">💬</div>
+                        {chatbot?.icon ? (
+                          <div className="relative w-full h-full flex items-center justify-center">
+                            <img 
+                              src={chatbot.icon} 
+                              alt="Chatbot icon"
+                              className="w-8 h-8 object-cover"
+                              style={{
+                                borderRadius: chatbot.iconShape === 'ROUND' ? '50%' : 
+                                             chatbot.iconShape === 'SQUARE' ? '0' : '12px',
+                                border: chatbot.iconBorder === 'FLAT' ? 'none' : 
+                                        chatbot.iconBorder === 'ROUND' ? '2px solid currentColor' : 
+                                        chatbot.iconBorder === 'ROUNDED_FLAT' ? '1px solid rgba(255,255,255,0.3)' : 'none'
+                              }}
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  const fallback = document.createElement('div');
+                                  fallback.className = 'text-xl';
+                                  fallback.textContent = '💬';
+                                  parent.appendChild(fallback);
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-xl">💬</div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -633,6 +673,14 @@ add_action('wp_footer', 'add_chatbot_script');
                       <p className="text-xs text-destructive mt-2">
                         Chat button is hidden (toggle "Show chat button" above)
                       </p>
+                    )}
+                    {chatbot?.icon && (
+                      <div className="mt-4 text-xs text-muted-foreground">
+                        <p>Using chatbot icon: {chatbot.icon.substring(0, 40)}...</p>
+                        {chatbot.iconShape && (
+                          <p>Shape: {chatbot.iconShape.replace('_', ' ').toLowerCase()}</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -698,37 +746,6 @@ add_action('wp_footer', 'add_chatbot_script');
                 </div>
                 
                 <Separator />
-                
-                <div className="space-y-3">
-                  <Label htmlFor="scriptUrl">Direct Script URL</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="scriptUrl"
-                      value={embedUrl}
-                      readOnly
-                      className="font-mono text-xs"
-                    />
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              navigator.clipboard.writeText(embedUrl);
-                              toast.success('Script URL copied');
-                            }}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Copy script URL</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
               </CardContent>
               <CardFooter className="flex flex-col gap-3">
                 <div className="flex gap-2 w-full">

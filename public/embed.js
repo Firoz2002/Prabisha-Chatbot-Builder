@@ -34,13 +34,33 @@
   let button = null;
   let isInitialized = false;
 
-  function init(userConfig) {
+  async function init(userConfig) {
     if (isInitialized) return;
     
     config = { ...defaults, ...userConfig };
     if (!config.chatbotId) {
       console.error('Chatbot ID is required');
       return;
+    }
+
+    // Fetch dynamic config from database to allow updates without code changes
+    try {
+      const response = await fetch(`${config.baseUrl}/api/chatbots/${config.chatbotId}`);
+      if (response.ok) {
+        const dbConfig = await response.json();
+        // Update config with database values if they exist
+        config.buttonColor = dbConfig.iconBgColor || config.buttonColor;
+        config.buttonTextColor = dbConfig.iconColor || config.buttonTextColor;
+        config.iconUrl = dbConfig.icon;
+        config.iconShape = dbConfig.iconShape;
+        config.iconSize = dbConfig.iconSize;
+        config.iconBorder = dbConfig.iconBorder;
+        if (dbConfig.popup_onload !== undefined && userConfig.autoOpen === undefined) {
+          config.autoOpen = dbConfig.popup_onload;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to fetch chatbot config, using local settings');
     }
 
     createIframe();
@@ -83,7 +103,30 @@
 
   function createButton() {
     button = document.createElement('div');
-    button.innerHTML = '💬';
+    
+    if (config.iconUrl) {
+      const img = document.createElement('img');
+      img.src = config.iconUrl;
+      img.alt = 'Chat';
+      img.style.cssText = `
+        width: 60%;
+        height: 60%;
+        object-fit: cover;
+      `;
+      
+      // Apply shape
+      if (config.iconShape === 'ROUND') img.style.borderRadius = '50%';
+      else if (config.iconShape === 'ROUNDED_SQUARE') img.style.borderRadius = '12px';
+      
+      // Apply border
+      if (config.iconBorder === 'ROUND') img.style.border = '2px solid currentColor';
+      else if (config.iconBorder === 'ROUNDED_FLAT') img.style.border = '1px solid rgba(255,255,255,0.3)';
+      
+      button.appendChild(img);
+    } else {
+      button.innerHTML = '💬';
+    }
+
     button.style.cssText = `
       position: fixed;
       z-index: 999999;
@@ -101,6 +144,7 @@
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       transition: all 0.3s ease;
+      overflow: hidden;
     `;
 
     applyPosition(button, false);

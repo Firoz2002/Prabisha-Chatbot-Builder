@@ -183,6 +183,8 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
 
   // Load conversation messages
   const loadConversationMessages = async (conversationId: string) => {
+    if(!conversationId) return;
+    
     try {
       const response = await fetch(`/api/chat/${conversationId}?chatbotId=${chatbotId}`, {
         method: 'GET',

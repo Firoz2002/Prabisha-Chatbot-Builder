@@ -1,6 +1,7 @@
 "use client"
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+
+import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 import {
   AudioWaveform,
   BookOpen,
@@ -46,17 +47,15 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarMenuAction
-} from "@/components/ui/sidebar";
-import { ChevronRight, type LucideIcon } from "lucide-react"
+  SidebarMenuAction,
+} from "@/components/ui/sidebar"
+import { ChevronRight, type LucideIcon, Plus, ChevronsUpDown } from "lucide-react"
 import {
   BadgeCheck,
   Bell,
-  ChevronsUpDown,
   CreditCard,
   LogOut,
   Sparkles,
-  Plus
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -66,20 +65,23 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuShortcut
+  DropdownMenuShortcut,
 } from "@/components/ui/dropdown-menu"
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar"
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton"
 import { signOut, useSession } from "next-auth/react"
 import { Workspace } from "@/types/workspace"
-import { Session } from "next-auth";
-import { toast } from "sonner";
-import { WorkspaceForm } from "../forms/workspace-form";
-import { useWorkspace } from "@/providers/workspace-provider";
+import { Session } from "next-auth"
+import { toast } from "sonner"
+import { WorkspaceForm } from "../forms/workspace-form"
+import { useWorkspace } from "@/providers/workspace-provider"
+import { Chatbot } from "../../../generated/prisma/client"
+import { usePathname, useRouter } from "next/navigation"
+import ChatbotForm from "../forms/chatbot-form"
 
 // Types for navigation items
 type NavItem = {
@@ -95,7 +97,10 @@ type NavItem = {
 }
 
 export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const id = props.id;
+  const id = props.id
+  const pathname = usePathname()
+  const router = useRouter()
+  const isChatbotRoute = pathname?.startsWith("/chatbots/")
 
   const defaultNavData = {
     mainNav: [
@@ -160,7 +165,7 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
             title: "Settings",
             url: `/chatbots/${id}/settings`,
           },
-        ]
+        ],
       },
       {
         title: "Review",
@@ -178,62 +183,98 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
             title: "Settings",
             url: `/chatbots/${id}/settings`,
           },
-        ]
-      }
+        ],
+      },
     ],
   }
-  const { data: session } = useSession();
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [navData, setNavData] = useState<NavItem[]>([]);
-      
+
+  const { data: session } = useSession()
+  const { activeWorkspace } = useWorkspace()
+
+  const [loading, setLoading] = useState(true)
+  const [chatbots, setChatbots] = useState<Chatbot[]>([])
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [activeChatbot, setActiveChatbot] = useState<Chatbot | null>(null)
+
   useEffect(() => {
     // Fetch workspaces
     const fetchWorkspaces = async () => {
       try {
-        const res = await fetch('/api/workspaces');
-        const data = await res.json();
-        setWorkspaces(data || []);
+        const res = await fetch("/api/workspaces")
+        const data = await res.json()
+        setWorkspaces(data || [])
       } catch (error) {
-        console.error('Error fetching workspaces:', error);
-        setWorkspaces([]);
+        console.error("Error fetching workspaces:", error)
+        setWorkspaces([])
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    // Fetch navigation data (you can replace this with your own API)
-    const fetchNavigationData = async () => {
+    fetchWorkspaces()
+  }, [])
+
+  useEffect(() => {
+    // Fetch chatbots for the active workspace
+    const fetchChatbots = async () => {
+      if (!activeWorkspace?.id) {
+        setChatbots([])
+        return
+      }
+
       try {
-        // Example API call for navigation data
-        // const res = await fetch('/api/navigation');
-        // const data = await res.json();
-        // setNavData(data.navMain || defaultNavData.navMain);
-        
-        // For now, use default data
-        setNavData(defaultNavData.mainNav);
-      } catch (error) {
-        console.error('Error fetching navigation:', error);
-        setNavData(defaultNavData.mainNav);
-      }
-    };
+        const res = await fetch(`/api/chatbots?workspaceId=${activeWorkspace.id}`)
+        const data = await res.json()
+        setChatbots(data || [])
 
-        fetchWorkspaces();
-    fetchNavigationData();
-  }, []);
+        // If we're on a chatbot route, set the active chatbot
+        if (isChatbotRoute && id) {
+          const currentChatbot = data.find((chatbot: Chatbot) => chatbot.id === id)
+          setActiveChatbot(currentChatbot || null)
+        }
+      } catch (error) {
+        console.error("Error fetching chatbots:", error)
+        setChatbots([])
+      }
+    }
+
+    fetchChatbots()
+  }, [activeWorkspace, isChatbotRoute, id])
+
+  // Update active chatbot when route changes
+  useEffect(() => {
+    if (isChatbotRoute && id && chatbots.length > 0) {
+      const currentChatbot = chatbots.find((chatbot) => chatbot.id === id)
+      setActiveChatbot(currentChatbot || null)
+    }
+  }, [pathname, chatbots, isChatbotRoute, id])
 
   return (
     <Sidebar variant="inset" collapsible="icon" {...props}>
       <SidebarHeader>
-        <WorkspaceSwitcher workspaces={workspaces} loading={loading} />
+        {isChatbotRoute && activeWorkspace ? (
+          <ChatbotSwitcher
+            chatbots={chatbots}
+            activeChatbot={activeChatbot}
+            workspaceId={activeWorkspace.id}
+            loading={loading}
+            onChatbotSelect={(chatbot) => {
+              if (chatbot.id !== id) {
+                router.push(`/chatbots/${chatbot.id}/instructions`)
+              }
+            }}
+          />
+        ) : (
+          <WorkspaceSwitcher activeWorkspace={activeWorkspace} workspaces={workspaces} loading={loading} />
+        )}
       </SidebarHeader>
-      { id ? (
+      {isChatbotRoute ? (
         <SidebarContent>
           <NavMain items={defaultNavData.chatbotNav} />
         </SidebarContent>
       ) : (
         <SidebarContent>
-          <NavMain items={navData} />
+          <NavMain items={defaultNavData.mainNav} />
         </SidebarContent>
       )}
       <SidebarFooter>
@@ -244,12 +285,8 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
   )
 }
 
-function NavMain({
-  items,
-}: {
-  items: NavItem[]
-}) {
-  if (!items.length) return null;
+function NavMain({ items }: { items: NavItem[] }) {
+  if (!items.length) return null
 
   return (
     <SidebarGroup>
@@ -296,13 +333,9 @@ function NavMain({
   )
 }
 
-export function NavUser({
-  session,
-}: {
-  session: Session | null
-}) {
+export function NavUser({ session }: { session: Session | null }) {
   const { isMobile } = useSidebar()
-  const { setTheme, theme } = useTheme();
+  const { setTheme, theme } = useTheme()
 
   const user = {
     name: session?.user?.name || "Guest",
@@ -321,9 +354,7 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">
-                  {user.name.charAt(0).toUpperCase()}
-                </AvatarFallback>
+                <AvatarFallback className="rounded-lg">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -342,9 +373,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">
-                    {user.name.charAt(0).toUpperCase()}
-                  </AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -354,9 +383,9 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                {theme === 'dark' ?  <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                {theme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                {theme === "dark" ? "Light Mode" : "Dark Mode"}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -372,24 +401,25 @@ export function NavUser({
 }
 
 function WorkspaceSwitcher({
+  activeWorkspace,
   workspaces,
   loading,
 }: {
+  activeWorkspace: Workspace | null
   workspaces: Workspace[]
   loading: boolean
 }) {
   const { isMobile } = useSidebar()
-  const { activeWorkspace, setActiveWorkspace } = useWorkspace();
+  const { setActiveWorkspace } = useWorkspace()
 
   useEffect(() => {
     if (workspaces.length > 0 && !activeWorkspace) {
       setActiveWorkspace(workspaces[0])
     }
-  }, [workspaces, activeWorkspace, setActiveWorkspace]);
+  }, [workspaces, activeWorkspace, setActiveWorkspace])
 
   const handleWorkspaceAdded = () => {
-    toast.success("Workspace added successfully!");
-    // Optionally, refresh the workspace list here
+    toast.success("Workspace added successfully!")
   }
 
   if (loading) {
@@ -447,9 +477,8 @@ function WorkspaceSwitcher({
                 <GalleryVerticalEnd className="size-4" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">
-                  {activeWorkspace?.name || "Select Workspace"}
-                </span>
+                <span className="truncate font-medium">{activeWorkspace?.name || "Select Workspace"}</span>
+                <span className="truncate text-xs text-muted-foreground">Workspace</span>
               </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
@@ -460,9 +489,7 @@ function WorkspaceSwitcher({
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Workspaces
-            </DropdownMenuLabel>
+            <DropdownMenuLabel className="text-muted-foreground text-xs">Workspaces</DropdownMenuLabel>
             {workspaces.map((workspace, index) => (
               <DropdownMenuItem
                 key={workspace.id || workspace.name}
@@ -474,10 +501,7 @@ function WorkspaceSwitcher({
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="gap-2 p-2 cursor-pointer"
-              onSelect={(e) => e.preventDefault()}
-            >
+            <DropdownMenuItem className="gap-2 p-2 cursor-pointer" onSelect={(e) => e.preventDefault()}>
               <WorkspaceForm
                 onSuccess={handleWorkspaceAdded}
                 trigger={
@@ -485,13 +509,128 @@ function WorkspaceSwitcher({
                     <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
                       <Plus className="size-4" />
                     </div>
-                    <div className="text-muted-foreground font-medium">
-                      Add Workspace
-                    </div>
+                    <div className="text-muted-foreground font-medium">Add Workspace</div>
                   </div>
                 }
               />
             </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
+function ChatbotSwitcher({
+  chatbots,
+  activeChatbot,
+  workspaceId,
+  loading,
+  onChatbotSelect,
+}: {
+  chatbots: Chatbot[]
+  activeChatbot: Chatbot | null
+  workspaceId: string
+  loading: boolean
+  onChatbotSelect: (chatbot: Chatbot) => void
+}) {
+  const { isMobile } = useSidebar()
+  const router = useRouter()
+
+  const handleCreateChatbot = () => {
+    router.push(`/chatbots/create?workspaceId=${workspaceId}`)
+  }
+
+  if (loading) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+          >
+            <div className="flex items-center gap-2 w-full">
+              <Skeleton className="h-8 w-8 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+              <Skeleton className="h-4 w-4 ml-auto" />
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
+
+  if (chatbots.length === 0) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            onClick={handleCreateChatbot}
+          >
+            <div className="flex items-center gap-2">
+              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                <Bot className="size-4" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">No Chatbots</span>
+                <span className="truncate text-xs text-muted-foreground">Create your first chatbot</span>
+              </div>
+              <Plus className="ml-auto size-4" />
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground border"
+            >
+              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                <Bot className="size-4" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">{activeChatbot?.name || "Select Chatbot"}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {chatbots.length} chatbot{chatbots.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <ChevronsUpDown className="ml-auto" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            align="start"
+            side={isMobile ? "bottom" : "right"}
+            sideOffset={4}
+          >
+            <DropdownMenuLabel className="text-muted-foreground text-xs">Chatbots</DropdownMenuLabel>
+            {chatbots.map((chatbot, index) => (
+              <DropdownMenuItem
+                key={chatbot.id}
+                onClick={() => onChatbotSelect(chatbot)}
+                className="gap-2 p-2"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex size-6 items-center justify-center rounded-md bg-primary/10">
+                    <Bot className="size-3" />
+                  </div>
+                  <span className="truncate">{chatbot.name}</span>
+                </div>
+                <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
