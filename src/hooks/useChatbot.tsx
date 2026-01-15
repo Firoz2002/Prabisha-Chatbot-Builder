@@ -238,6 +238,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Created new conversation:', data);
         setConversationId(data.id);
         localStorage.setItem(`chatbot_${chatbotId}_conversation`, data.id);
         
@@ -427,7 +428,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
   const refetchChatbot = async () => {
     await fetchChatbotData();
   };
-
+console.log("ConversationId Inside hook", conversationId)
   return {
     // Chatbot data
     chatbot,

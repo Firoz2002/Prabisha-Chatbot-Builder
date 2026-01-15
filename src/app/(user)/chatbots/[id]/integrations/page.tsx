@@ -92,10 +92,6 @@ export default function EmbedPage() {
 
   // Generate embed code based on tech stack
   function generateEmbedCode(stack: TechStack) {
-    const { showButton, autoOpen, delay, position, buttonColor, buttonTextColor, buttonSize } = customizations;
-    
-    // Simplified config object for better maintainability
-    // Now settings are fetched dynamically from the database in embed.js
     const configObject = `{
   chatbotId: '${chatbotId}',
   baseUrl: '${baseUrl}'
@@ -434,355 +430,190 @@ add_action('wp_footer', 'add_chatbot_script');
   ];
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      <div className="flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Embed Chatbot</h1>
-              <p className="text-sm md:text-base text-muted-foreground mt-1">
-                Add your chatbot to any website with a simple script
-              </p>
-            </div>
-            <Badge variant={chatbot?.isActive ? "default" : "secondary"}>
-              {chatbot?.isActive ? 'Active' : 'Inactive'}
-            </Badge>
-          </div>
-          <Separator />
-        </div>
-
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Preview & Settings */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Customization Options */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Customization Options
-                </CardTitle>
-                <CardDescription>
-                  Configure how your chatbot appears and behaves
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <Label htmlFor="position">Position</Label>
-                    <Select
-                      value={customizations.position}
-                      onValueChange={(value) => setCustomizations(prev => ({ 
-                        ...prev, 
-                        position: value as any 
-                      }))}
-                    >
-                      <SelectTrigger id="position">
-                        <SelectValue placeholder="Select position" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bottom-right">Bottom Right</SelectItem>
-                        <SelectItem value="bottom-left">Bottom Left</SelectItem>
-                        <SelectItem value="top-right">Top Right</SelectItem>
-                        <SelectItem value="top-left">Top Left</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <Label htmlFor="buttonSize">Button Size</Label>
-                    <Select
-                      value={customizations.buttonSize}
-                      onValueChange={(value) => setCustomizations(prev => ({ 
-                        ...prev, 
-                        buttonSize: value as any 
-                      }))}
-                    >
-                      <SelectTrigger id="buttonSize">
-                        <SelectValue placeholder="Select size" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="small">Small</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="large">Large</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label htmlFor="buttonColor">Button Color</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Chatbot icon from settings will be displayed with this background
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <Input
-                        id="buttonColor"
-                        type="color"
-                        value={customizations.buttonColor}
-                        onChange={(e) => setCustomizations(prev => ({ 
-                          ...prev, 
-                          buttonColor: e.target.value 
-                        }))}
-                        className="w-12 h-12 p-1 cursor-pointer"
-                      />
-                      <Input
-                        value={customizations.buttonColor}
-                        onChange={(e) => setCustomizations(prev => ({ 
-                          ...prev, 
-                          buttonColor: e.target.value 
-                        }))}
-                        className="font-mono text-sm"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <Label htmlFor="buttonTextColor">Text Color</Label>
-                    <div className="flex items-center gap-3">
-                      <Input
-                        id="buttonTextColor"
-                        type="color"
-                        value={customizations.buttonTextColor}
-                        onChange={(e) => setCustomizations(prev => ({ 
-                          ...prev, 
-                          buttonTextColor: e.target.value 
-                        }))}
-                        className="w-12 h-12 p-1 cursor-pointer"
-                      />
-                      <Input
-                        value={customizations.buttonTextColor}
-                        onChange={(e) => setCustomizations(prev => ({ 
-                          ...prev, 
-                          buttonTextColor: e.target.value 
-                        }))}
-                        className="font-mono text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="showButton">Show chat button</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Display the chat button on your website
-                      </p>
-                    </div>
-                    <Switch
-                      id="showButton"
-                      checked={customizations.showButton}
-                      onCheckedChange={(checked) => setCustomizations(prev => ({ 
-                        ...prev, 
-                        showButton: checked 
-                      }))}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="autoOpen">Auto-open on page load</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically open chat when page loads
-                      </p>
-                    </div>
-                    <Switch
-                      id="autoOpen"
-                      checked={customizations.autoOpen}
-                      onCheckedChange={(checked) => setCustomizations(prev => ({ 
-                        ...prev, 
-                        autoOpen: checked 
-                      }))}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Preview Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="h-5 w-5" />
-                  Preview
-                </CardTitle>
-                <CardDescription>
-                  See how your chatbot will appear on your website
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="relative border rounded-lg p-6 bg-gradient-to-br from-background to-muted min-h-[300px] md:min-h-[400px] flex items-center justify-center">
-                  {customizations.showButton && (
-                    <div
-                      className={`absolute ${
-                        customizations.position === 'bottom-right' ? 'bottom-4 right-4' :
-                        customizations.position === 'bottom-left' ? 'bottom-4 left-4' :
-                        customizations.position === 'top-right' ? 'top-4 right-4' : 'top-4 left-4'
-                      }`}
-                    >
-                      <div
-                        className="rounded-full shadow-lg flex items-center justify-center cursor-pointer transition-transform hover:scale-105 overflow-hidden"
-                        style={{
-                          backgroundColor: customizations.buttonColor,
-                          color: customizations.buttonTextColor,
-                          width: customizations.buttonSize === 'small' ? '50px' :
-                                customizations.buttonSize === 'medium' ? '60px' : '70px',
-                          height: customizations.buttonSize === 'small' ? '50px' :
-                                 customizations.buttonSize === 'medium' ? '60px' : '70px'
-                        }}
-                      >
-                        {chatbot?.icon ? (
-                          <div className="relative w-full h-full flex items-center justify-center">
-                            <img 
-                              src={chatbot.icon} 
-                              alt="Chatbot icon"
-                              className="w-8 h-8 object-cover"
-                              style={{
-                                borderRadius: chatbot.iconShape === 'ROUND' ? '50%' : 
-                                             chatbot.iconShape === 'SQUARE' ? '0' : '12px',
-                                border: chatbot.iconBorder === 'FLAT' ? 'none' : 
-                                        chatbot.iconBorder === 'ROUND' ? '2px solid currentColor' : 
-                                        chatbot.iconBorder === 'ROUNDED_FLAT' ? '1px solid rgba(255,255,255,0.3)' : 'none'
-                              }}
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const parent = target.parentElement;
-                                if (parent) {
-                                  const fallback = document.createElement('div');
-                                  fallback.className = 'text-xl';
-                                  fallback.textContent = '💬';
-                                  parent.appendChild(fallback);
-                                }
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-xl">💬</div>
-                        )}
+    <div className="space-y-6">
+      {/* Left Column - Preview & Settings */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Preview Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Preview
+            </CardTitle>
+            <CardDescription>
+              See how your chatbot will appear on your website
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="relative border rounded-lg p-6 bg-gradient-to-br from-background to-muted min-h-[300px] md:min-h-[400px] flex items-center justify-center">
+              {customizations.showButton && (
+                <div
+                  className={`absolute ${
+                    customizations.position === 'bottom-right' ? 'bottom-4 right-4' :
+                    customizations.position === 'bottom-left' ? 'bottom-4 left-4' :
+                    customizations.position === 'top-right' ? 'top-4 right-4' : 'top-4 left-4'
+                  }`}
+                >
+                  <div
+                    className="rounded-full shadow-lg flex items-center justify-center cursor-pointer transition-transform hover:scale-105 overflow-hidden"
+                    style={{
+                      backgroundColor: customizations.buttonColor,
+                      color: customizations.buttonTextColor,
+                      width: customizations.buttonSize === 'small' ? '50px' :
+                            customizations.buttonSize === 'medium' ? '60px' : '70px',
+                      height: customizations.buttonSize === 'small' ? '50px' :
+                              customizations.buttonSize === 'medium' ? '60px' : '70px'
+                    }}
+                  >
+                    {chatbot?.icon ? (
+                      <div className="relative w-full h-full flex items-center justify-center">
+                        <img 
+                          src={chatbot.icon} 
+                          alt="Chatbot icon"
+                          className="w-8 h-8 object-cover"
+                          style={{
+                            borderRadius: chatbot.iconShape === 'ROUND' ? '50%' : 
+                                          chatbot.iconShape === 'SQUARE' ? '0' : '12px',
+                            border: chatbot.iconBorder === 'FLAT' ? 'none' : 
+                                    chatbot.iconBorder === 'ROUND' ? '2px solid currentColor' : 
+                                    chatbot.iconBorder === 'ROUNDED_FLAT' ? '1px solid rgba(255,255,255,0.3)' : 'none'
+                          }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              const fallback = document.createElement('div');
+                              fallback.className = 'text-xl';
+                              fallback.textContent = '💬';
+                              parent.appendChild(fallback);
+                            }
+                          }}
+                        />
                       </div>
-                    </div>
-                  )}
-                  
-                  <div className="text-center text-muted-foreground">
-                    <Globe className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-sm md:text-base">Website Preview Area</p>
-                    <p className="text-xs md:text-sm">Your chatbot button will appear here</p>
-                    {!customizations.showButton && (
-                      <p className="text-xs text-destructive mt-2">
-                        Chat button is hidden (toggle "Show chat button" above)
-                      </p>
-                    )}
-                    {chatbot?.icon && (
-                      <div className="mt-4 text-xs text-muted-foreground">
-                        <p>Using chatbot icon: {chatbot.icon.substring(0, 40)}...</p>
-                        {chatbot.iconShape && (
-                          <p>Shape: {chatbot.iconShape.replace('_', ' ').toLowerCase()}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column - Embed Code */}
-          <div className="space-y-6 h-full">
-            {/* Tech Stack Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Code className="h-5 w-5" />
-                  Select Your Tech Stack
-                </CardTitle>
-                <CardDescription>
-                  Choose your framework or platform
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-2">
-                  {techStacks.map((stack) => (
-                    <Button
-                      key={stack.id}
-                      variant={selectedStack === stack.id ? 'default' : 'outline'}
-                      className="justify-start gap-2 h-auto py-3"
-                      onClick={() => setSelectedStack(stack.id as TechStack)}
-                    >
-                      <span className="text-lg">{stack.icon}</span>
-                      <span className="text-sm">{stack.label}</span>
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Embed Code Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  {techStacks.find(s => s.id === selectedStack)?.label} Code
-                </CardTitle>
-                <CardDescription>
-                  Copy and paste this code into your project
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="relative">
-                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-xs max-h-[400px]">
-                      <code>{embedCode}</code>
-                    </pre>
-                    <Button
-                      size="sm"
-                      className="absolute top-2 right-2"
-                      onClick={copyToClipboard}
-                    >
-                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-                
-                <Separator />
-              </CardContent>
-              <CardFooter className="flex flex-col gap-3">
-                <div className="flex gap-2 w-full">
-                  <Button onClick={copyToClipboard} className="flex-1 gap-2">
-                    {copied ? (
-                      <>
-                        <Check className="h-4 w-4" />
-                        Copied!
-                      </>
                     ) : (
-                      <>
-                        <Copy className="h-4 w-4" />
-                        Copy Code
-                      </>
+                      <div className="text-xl">💬</div>
                     )}
-                  </Button>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          onClick={downloadScript}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Download as file</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  </div>
                 </div>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
+              )}
+              
+              <div className="text-center text-muted-foreground">
+                <Globe className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm md:text-base">Website Preview Area</p>
+                <p className="text-xs md:text-sm">Your chatbot button will appear here</p>
+                {!customizations.showButton && (
+                  <p className="text-xs text-destructive mt-2">
+                    Chat button is hidden (toggle "Show chat button" above)
+                  </p>
+                )}
+                {chatbot?.icon && (
+                  <div className="mt-4 text-xs text-muted-foreground">
+                    <p>Using chatbot icon: {chatbot.icon.substring(0, 40)}...</p>
+                    {chatbot.iconShape && (
+                      <p>Shape: {chatbot.iconShape.replace('_', ' ').toLowerCase()}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Right Column - Embed Code */}
+      <div className="space-y-6 h-full">
+        {/* Tech Stack Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Code className="h-5 w-5" />
+              Select Your Tech Stack
+            </CardTitle>
+            <CardDescription>
+              Choose your framework or platform
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-2">
+              {techStacks.map((stack) => (
+                <Button
+                  key={stack.id}
+                  variant={selectedStack === stack.id ? 'default' : 'outline'}
+                  className="justify-start gap-2 h-auto py-3"
+                  onClick={() => setSelectedStack(stack.id as TechStack)}
+                >
+                  <span className="text-lg">{stack.icon}</span>
+                  <span className="text-sm">{stack.label}</span>
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Embed Code Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              {techStacks.find(s => s.id === selectedStack)?.label} Code
+            </CardTitle>
+            <CardDescription>
+              Copy and paste this code into your project
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="relative">
+                <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-xs max-h-[400px]">
+                  <code>{embedCode}</code>
+                </pre>
+                <Button
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={copyToClipboard}
+                >
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            
+            <Separator />
+          </CardContent>
+          <CardFooter className="flex flex-col gap-3">
+            <div className="flex gap-2 w-full">
+              <Button onClick={copyToClipboard} className="flex-1 gap-2">
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy Code
+                  </>
+                )}
+              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={downloadScript}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Download as file</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </CardFooter>
+        </Card>
       </div>
     </div>
   );

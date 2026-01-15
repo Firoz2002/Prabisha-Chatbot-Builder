@@ -2,257 +2,201 @@
 
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
-import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Check, Info, Smartphone, Loader2 } from "lucide-react"
-
-import Chat from "@/components/features/chat" 
+import { Check, Info, Loader2, Sparkles } from "lucide-react"
+import { useChatbot } from "@/providers/chatbot-provider"
 
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
-interface ChatbotData {
-  id: string;
-  name: string;
-  greeting: string;
-  directive: string;
-}
-
 export default function InstructionsPage() {
-  const params = useParams()
-  const chatbotId = params.id as string
-
-  const [isLoading, setIsLoading] = useState(false);
+  const { config, updateConfig, refreshConfig } = useChatbot();
   
-  const [chatbotData, setChatbotData] = useState<ChatbotData | null>(null)
-  const [isLoadingChatbot, setIsLoadingChatbot] = useState(true)
-
-  const [name, setName] = useState("")
-  const [directive, setDirective] = useState("")
-  const [greeting, setGreeting] = useState("How can I help you today?")
-
+  const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "How can I help you today?" }
+    { role: "assistant", content: config.greeting }
   ])
-  const [isGeneratingGreeting, setIsGeneratingGreeting] = useState(false)
 
-  // Fetch chatbot data on component mount
+  // Initialize local state from context
+  const [name, setName] = useState(config.name || "");
+  const [directive, setDirective] = useState(config.directive || "");
+  const [greeting, setGreeting] = useState(config.greeting || "How can I help you today?");
+
+  // Sync local state when config changes
   useEffect(() => {
-    fetch(`/api/chatbots/${chatbotId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setName(data.name)
-        setChatbotData(data)
-        setGreeting(data.greeting)
-        setDirective(data.directive)
-        setIsLoadingChatbot(false)
-      })
-  }, [chatbotId])
-
-  const handleGenerateGreeting = async () => {
-    setIsGeneratingGreeting(true)
-    try {
-      // Call AI greeting generation API
-      const response = await fetch("/api/generate-greeting", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ chatbotId, directive }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const data = await response.json()
-      
-      if (data.greeting) {
-        setGreeting(data.greeting)
-        toast.success("Greeting generated successfully!")
-      } else {
-        throw new Error("No greeting returned")
-      }
-    } catch (error) {
-      console.error("Error generating greeting:", error)
-      toast.error("Failed to generate greeting")
-    } finally {
-      setIsGeneratingGreeting(false)
-    }
-  }
+    setName(config.name || "");
+    setGreeting(config.greeting || "How can I help you today?");
+    setDirective(config.directive || "");
+    setMessages([{ role: "assistant", content: config.greeting || "How can I help you today?" }]);
+  }, [config]);
 
   const handleSave = async () => {
-    if (!chatbotData) return
-
-    setIsLoading(true)
+    setIsLoading(true);
     
-    const formData = new FormData();
-    formData.append("name", name);
-    formData.append("greeting", greeting);
-    formData.append("directive", directive);
-
     try {
-      const response = await fetch(`/api/chatbots/${chatbotId}`, {
+      const updates = {
+        name,
+        greeting,
+        directive
+      };
+
+      // Update local context immediately for better UX
+      updateConfig(updates);
+
+      const formData = new FormData();
+      formData.append("name", name);
+      formData.append("greeting", greeting);
+      formData.append("directive", directive);
+
+      const response = await fetch(`/api/chatbots/${config.id}`, {
         method: "PUT",
         body: formData,
-      })
+      });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      // Update the initial greeting in the chat if it's the first message
+      // Refresh config from server to ensure consistency
+      await refreshConfig();
+      
+      toast.success("Changes saved successfully!");
+      
+      // Update chat messages with new greeting
       if (messages.length === 1 && messages[0].role === "assistant") {
-        setMessages([{ role: "assistant", content: greeting }])
+        setMessages([{ role: "assistant", content: greeting }]);
       }
-      
-      toast.success("Changes saved successfully!")
     } catch (error) {
-      console.error("Error saving changes:", error)
-      toast.error("Failed to save changes")
+      console.error("Error saving changes:", error);
+      toast.error("Failed to save changes");
+      // Optionally revert context update on error
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
-  // Custom message handler for the Chat component
-  const handleSendMessage = async (userMessage: string, previousMessages: Message[]): Promise<string> => {
-    try {
-      const res = await fetch(`/api/chatbots/${chatbotId}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          input: userMessage,
-          prompt: directive,
-          messages: previousMessages,
-        }),
-      })
-
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`)
-      }
-
-      const data = await res.json()
-      return data.message || "I'm sorry, I couldn't process that request."
-      
-    } catch (error) {
-      console.error("Error while sending message:", error)
-      return "Sorry, I encountered an error. Please try again."
-    }
-  }
-
-  if (isLoadingChatbot) {
+  // If config is still loading, show loading state
+  if (!config.id) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="flex min-h-[400px] w-full items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
-    )
-  }
-
-  if (!chatbotData) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="p-6">
-          <p className="text-lg">Chatbot not found</p>
-        </Card>
-      </div>
-    )
+    );
   }
 
   return (
-    <div className="flex w-full max-h-[calc(100vh-7rem)]">
-      {/* Left Panel - Instructions */}
-      <div className="w-full lg:w-1/2 border-r border-border overflow-y-auto no-scrollbar">
-        <div className="p-8 max-h-screen">
-          <h1 className="text-2xl font-semibold mb-8">Instructions</h1>
-
-          {/* Greeting Section */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Label htmlFor="greeting" className="text-sm font-medium">
-                Greeting
+    <div className="space-y-6">
+      {/* Name Section */}
+      <div>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="name" className="text-sm font-medium">
+                Chatbot Name
               </Label>
               <Info className="w-4 h-4 text-muted-foreground" />
             </div>
-            <Textarea
-              id="greeting"
-              value={greeting}
-              onChange={(e) => setGreeting(e.target.value)}
-              className="min-h-[100px] resize-none"
-              placeholder="Enter greeting message..."
-            />
           </div>
-
-          {/* Directive Section */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Label htmlFor="directive" className="text-sm font-medium">
-                Directive
-              </Label>
-              <Info className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <Textarea
-              id="directive"
-              value={directive}
-              onChange={(e) => setDirective(e.target.value)}
-              className="min-h-[280px] font-mono text-sm resize-none"
-              placeholder="Enter directive instructions..."
-            />
-          </div>
-
-          {/* Save Button */}
-          <Button
-            size="lg"
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mb-6 font-semibold"
-            onClick={handleSave}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              "Saving..."
-            ) : (
-              <>
-                <Check className="w-4 h-4 mr-2" />
-                Save Changes
-              </>
-            )}
-          </Button>
+          <Textarea
+            id="name"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              updateConfig({ name: e.target.value });
+            }}
+            className="min-h-10 resize-none"
+            placeholder="Enter your chatbot name..."
+            rows={1}
+          />
         </div>
       </div>
 
-      {/* Right Panel - Chat Preview */}
-      <div className="hidden lg:block w-1/2">
-        <Chat
-          id={chatbotId}
-          name={name}
-          greeting={greeting}
-          directive={directive}
-          initialMessages={messages}
-          onSendMessage={handleSendMessage}
-          showPreviewControls={true}
-        />
+      {/* Greeting Section */}
+      <div>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="greeting" className="text-sm font-medium">
+                Greeting Message
+              </Label>
+              <Info className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </div>
+          <Textarea
+            id="greeting"
+            value={greeting}
+            onChange={(e) => {
+              setGreeting(e.target.value);
+              updateConfig({ greeting: e.target.value });
+            }}
+            className="min-h-30 resize-none"
+            placeholder="How can I help you today?"
+            rows={4}
+          />
+          <p className="text-xs text-muted-foreground mt-2">
+            This is the first message users will see when they open the chatbot
+          </p>
+        </div>
       </div>
 
-      {/* Mobile Chat Preview Button */}
-      <div className="lg:hidden fixed bottom-6 right-6">
+      {/* Directive Section */}
+      <div>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="directive" className="text-sm font-medium">
+                Instructions & Personality
+              </Label>
+              <Info className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </div>
+          <Textarea
+            id="directive"
+            value={directive}
+            onChange={(e) => {
+              setDirective(e.target.value);
+              updateConfig({ directive: e.target.value });
+            }}
+            className="min-h-[280px] font-mono text-sm resize-none"
+            placeholder={`Example: You are a helpful customer support assistant for an e-commerce store. 
+- Always be polite and professional
+- Keep responses concise
+- If you don't know something, offer to connect with a human agent
+- Never share internal company information`}
+            rows={12}
+          />
+          <div className="text-xs text-muted-foreground mt-2 space-y-1">
+            <p>Define your chatbot's personality, behavior, and instructions.</p>
+            <p>Be specific about tone, response length, and limitations.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="pt-4 border-t">
         <Button
           size="lg"
-          className="rounded-full shadow-lg"
-          onClick={() => {
-            // Implement mobile preview modal or drawer
-            toast.info("Preview available on desktop view")
-          }}
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg"
+          onClick={handleSave}
+          disabled={isLoading}
         >
-          <Smartphone className="w-5 h-5 mr-2" />
-          Preview
+          {isLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Saving Changes...
+            </>
+          ) : (
+            <>
+              <Check className="w-4 h-4 mr-2" />
+              Save Changes
+            </>
+          )}
         </Button>
       </div>
     </div>
-  )
+  );
 }

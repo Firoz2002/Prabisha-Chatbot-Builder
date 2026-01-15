@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth';
+import { deleteKnowledgeBase } from '@/lib/langchain/vector-store';
 
 interface RouterParams {
-  params: Promise<{ id: string }>
+  params: Promise<{ knowledgeId: string }>
 }
 
 export async function DELETE(
@@ -16,19 +17,34 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const { id } = await context.params;
+    const { knowledgeId } = await context.params;
+    if (!knowledgeId) {
+      return NextResponse.json({ error: 'Knowledge base ID is required' }, { status: 400 });
+    }
 
+    const knowledgeBase = await prisma.knowledgeBase.findUnique({
+      where: {
+        id: knowledgeId,
+      },
+    });
+    if (!knowledgeBase) {
+      return NextResponse.json({ error: 'Knowledge base not found' }, { status: 404 });
+    }
+
+    const deleteResult = await deleteKnowledgeBase(knowledgeId);
+    console.log(`Deleted ${deleteResult.deletedCount} vector documents from MongoDB for knowledge base ${knowledgeId}`);
+    
     // First delete all documents in the knowledge base
     await prisma.document.deleteMany({
       where: {
-        knowledgeBaseId: id,
+        knowledgeBaseId: knowledgeId,
       },
-    })
+    });
 
     // Then delete the knowledge base
     await prisma.knowledgeBase.delete({
       where: {
-        id: id,
+        id: knowledgeId,
       },
       include: {
         documents: true,

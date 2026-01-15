@@ -44,7 +44,7 @@ interface ChatProps {
   useDbConfig?: boolean
 }
 
-export default function Chat({
+export default function ChatPreview({
   id,
   name: propName,
   greeting: propGreeting,
@@ -385,7 +385,7 @@ export default function Chat({
   }
 
   return (
-    <div className="h-full max-h-[calc(100vh-7rem)] flex flex-col">
+    <div className="h-full flex flex-col">
       {/* Preview Header */}
       {showPreviewControls && (
         <div className="flex items-center justify-between px-6 py-4 border-b">

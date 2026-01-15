@@ -4,14 +4,15 @@ import Image from 'next/image';
 import DOMPurify from 'dompurify';
 import { useEffect, useState } from 'react';
 import { 
-  ChevronRight, 
   Loader2, 
   Zap,
   XIcon,
   MicIcon, 
   MicOffIcon, 
   RefreshCw, 
-  Send, 
+  Send,
+  UserPlus,
+  CheckCircle2
 } from 'lucide-react';
 import { ChatMessage } from '@/types/chat';
 import {
@@ -22,11 +23,12 @@ import {
   PromptInputButton,
   PromptInputSubmit,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
-// Replace useChatState with useChatbot
 import { useChatbot } from '@/hooks/useChatbot';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
+import { useLeadGeneration } from '@/hooks/useLeadGeneration';
+import { LeadForm } from '@/components/forms/lead-form';
+import { Button } from '@/components/ui/button';
 
-// Update props to accept chatbotId instead of chatbot
 interface ChatbotWidgetProps {
   chatbotId: string;
   initialChatbotData?: any;
@@ -36,7 +38,7 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
   const [isInitialized, setIsInitialized] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
 
-  // Use the new useChatbot hook
+  // Use the chatbot hook
   const {
     chatbot,
     isLoadingChatbot,
@@ -50,6 +52,7 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     isCheckingSession,
     hasLoadedInitialMessages,
     quickQuestions,
+    conversationId,
     handleSubmit,
     handleQuickQuestion,
     handleNewChat,
@@ -60,6 +63,28 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
   } = useChatbot({
     chatbotId,
     initialChatbotData,
+  });
+
+  // Use lead generation hook
+  const {
+    activeLeadForm,
+    isLeadFormVisible,
+    shouldShowLeadForm,
+    isLoadingLeadConfig,
+    leadFormError,
+    hasSubmittedLead,
+    showLeadForm,
+    hideLeadForm,
+    submitLeadForm,
+    checkLeadRequirements,
+    markLeadAsSubmitted,
+  } = useLeadGeneration({
+    chatbotId,
+    conversationId,
+    onLeadCollected: (leadData) => {
+      console.log('Lead collected:', leadData);
+      // You can trigger additional actions here
+    },
   });
 
   useEffect(() => {
@@ -98,19 +123,45 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     }, '*');
   };
 
+  // Check lead requirements when messages change
+  useEffect(() => {
+    if (messages.length > 0 && !hasSubmittedLead && conversationId) {
+      checkLeadRequirements();
+    }
+  }, [messages, hasSubmittedLead, conversationId, checkLeadRequirements]);
+
+  // Show lead form automatically if needed
+  useEffect(() => {
+    if (shouldShowLeadForm && activeLeadForm && !isLeadFormVisible && !loading) {
+      setTimeout(() => {
+        showLeadForm();
+      }, 1000);
+    }
+  }, [shouldShowLeadForm, activeLeadForm, isLeadFormVisible, loading, showLeadForm]);
+
   if (!isInitialized || isLoadingChatbot) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading chatbot...</p>
+        </div>
       </div>
     );
   }
 
   if (chatbotError) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full min-h-[400px]">
         <div className="text-center p-4">
           <p className="text-destructive">Failed to load chatbot</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            variant="outline" 
+            className="mt-2"
+          >
+            Retry
+          </Button>
         </div>
       </div>
     );
@@ -121,43 +172,114 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
   }
 
   return (
-    <ChatBot chatbot={chatbot} onClose={handleClose} />
+    <ChatBot 
+      chatbot={chatbot} 
+      onClose={handleClose}
+      text={text}
+      setText={setText}
+      status={status}
+      messages={messages}
+      loading={loading}
+      error={error}
+      isCheckingSession={isCheckingSession}
+      hasLoadedInitialMessages={hasLoadedInitialMessages}
+      quickQuestions={quickQuestions}
+      conversationId={conversationId}
+      handleSubmit={handleSubmit}
+      handleQuickQuestion={handleQuickQuestion}
+      handleNewChat={handleNewChat}
+      formatTime={formatTime}
+      messagesEndRef={messagesEndRef}
+      inputRef={inputRef}
+      chatContainerRef={chatContainerRef}
+      // Lead generation props
+      activeLeadForm={activeLeadForm}
+      isLeadFormVisible={isLeadFormVisible}
+      shouldShowLeadForm={shouldShowLeadForm}
+      isLoadingLeadConfig={isLoadingLeadConfig}
+      leadFormError={leadFormError}
+      hasSubmittedLead={hasSubmittedLead}
+      showLeadForm={showLeadForm}
+      hideLeadForm={hideLeadForm}
+      submitLeadForm={submitLeadForm}
+      markLeadAsSubmitted={markLeadAsSubmitted}
+    />
   );
 }
 
 interface ChatBotProps {
   chatbot: any;
   onClose: () => void;
+  // Chat state props
+  text: string;
+  setText: (text: string) => void;
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
+  messages: ChatMessage[];
+  loading: boolean;
+  error: string;
+  isCheckingSession: boolean;
+  hasLoadedInitialMessages: boolean;
+  quickQuestions: string[];
+  conversationId: string | null;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  handleQuickQuestion: (question: string) => Promise<void>;
+  handleNewChat: () => Promise<void>;
+  formatTime: (date?: Date) => string;
+  // Refs
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  chatContainerRef: React.RefObject<HTMLDivElement | null>;
+  // Lead generation props
+  activeLeadForm: any;
+  isLeadFormVisible: boolean;
+  shouldShowLeadForm: boolean;
+  isLoadingLeadConfig: boolean;
+  leadFormError: string | null;
+  hasSubmittedLead: boolean;
+  showLeadForm: () => void;
+  hideLeadForm: () => void;
+  submitLeadForm: (formData: Record<string, string>) => Promise<boolean>;
+  markLeadAsSubmitted: () => void;
 }
 
-function ChatBot({ chatbot, onClose }: ChatBotProps) {
+function ChatBot({
+  chatbot,
+  onClose,
+  // Chat state
+  text,
+  setText,
+  status,
+  messages,
+  loading,
+  error,
+  isCheckingSession,
+  hasLoadedInitialMessages,
+  quickQuestions,
+  conversationId,
+  handleSubmit,
+  handleQuickQuestion,
+  handleNewChat,
+  formatTime,
+  // Refs
+  messagesEndRef,
+  inputRef,
+  chatContainerRef,
+  // Lead generation
+  activeLeadForm,
+  isLeadFormVisible,
+  shouldShowLeadForm,
+  isLoadingLeadConfig,
+  leadFormError,
+  hasSubmittedLead,
+  showLeadForm,
+  hideLeadForm,
+  submitLeadForm,
+  markLeadAsSubmitted,
+}: ChatBotProps) {
   const [isOpen, setIsOpen] = useState<boolean>(true);
   const [isMobile, setIsMobile] = useState(false);
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
 
-  // Use the new useChatbot hook for chat state
-  const {
-    text,
-    setText,
-    status,
-    messages,
-    loading,
-    error,
-    isCheckingSession,
-    hasLoadedInitialMessages,
-    quickQuestions,
-    handleSubmit,
-    handleQuickQuestion,
-    handleNewChat,
-    formatTime,
-    messagesEndRef,
-    inputRef,
-    chatContainerRef,
-  } = useChatbot({
-    chatbotId: chatbot.id,
-    initialChatbotData: chatbot,
-  });
-  
   const {
     transcript,
     startListening,
@@ -213,6 +335,12 @@ function ChatBot({ chatbot, onClose }: ChatBotProps) {
     setIsMicrophoneOn(!isMicrophoneOn);
   };
 
+  const handleLeadFormSuccess = () => {
+    markLeadAsSubmitted();
+    // You can add a success message to the chat
+    // For example: addMessageToChat({ role: 'bot', content: 'Thank you for your information!' });
+  };
+
   if (isCheckingSession || !hasLoadedInitialMessages) {
     return (
       <div className={`${isEmbedded ? 'w-full h-full' : `fixed ${isMobile ? 'inset-0' : 'bottom-6 right-6'} z-50`}`}>
@@ -252,6 +380,22 @@ function ChatBot({ chatbot, onClose }: ChatBotProps) {
             chatbot={chatbot}
           />
 
+          {/* Lead Form Overlay */}
+          {isLeadFormVisible && activeLeadForm && (
+            <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+                <LeadForm
+                  config={activeLeadForm}
+                  chatbotId={chatbot.id}
+                  conversationId={conversationId || ''}
+                  onClose={hideLeadForm}
+                  onSuccess={handleLeadFormSuccess}
+                  onSubmitLead={submitLeadForm}
+                />
+              </div>
+            </div>
+          )}
+
           <ChatMessages
             messages={messages}
             loading={loading}
@@ -263,6 +407,9 @@ function ChatBot({ chatbot, onClose }: ChatBotProps) {
             messagesEndRef={messagesEndRef}
             formatTime={formatTime}
             chatbot={chatbot}
+            // Add new prop for lead form button
+            showLeadForm={!hasSubmittedLead && activeLeadForm ? showLeadForm : undefined}
+            hasSubmittedLead={hasSubmittedLead}
           />
             
             {error && (
@@ -286,6 +433,10 @@ function ChatBot({ chatbot, onClose }: ChatBotProps) {
               status={status}
               inputRef={inputRef}
               onToggleMicrophone={handleToggleMicrophone}
+              // Add new prop for lead button
+              hasLeadForm={!hasSubmittedLead && !!activeLeadForm}
+              onShowLeadForm={showLeadForm}
+              isLoadingLeadConfig={isLoadingLeadConfig}
             />
         </div>
       ) : (
@@ -318,7 +469,7 @@ function ChatToggleButton({ onClick, isMobile, chatbot }: ChatToggleButtonProps)
         hover:scale-110 active:scale-95 group animate-bounce-slow
         ${isMobile ? 'hidden' : ''}
       `}
-      aria-label="Open property search assistant"
+      aria-label="Open chatbot"
     >
       <div className="relative">
         <Image
@@ -395,6 +546,8 @@ interface ChatMessagesProps {
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   formatTime: (date?: Date) => string;
   chatbot: any;
+  showLeadForm?: () => void;
+  hasSubmittedLead: boolean;
 }
 
 const sanitizedHTML = (html: string) => DOMPurify.sanitize(html);
@@ -409,15 +562,18 @@ function ChatMessages({
   chatContainerRef,
   messagesEndRef,
   formatTime,
-  chatbot
+  chatbot,
+  showLeadForm,
+  hasSubmittedLead,
 }: ChatMessagesProps) {
   
   const hasUserMessages = messages.filter(m => m.role === 'user').length > 0;
+  const hasMultipleMessages = messages.length >= 2;
 
   return (
     <div 
       ref={chatContainerRef}
-      className="flex-1 overflow-y-auto bg-linear-to-b from-background to-muted/30"
+      className="flex-1 overflow-y-auto bg-linear-to-b from-background to-muted/30 relative"
     >
       <div className="p-4 space-y-6">
         {messages.map((msg, index) => (
@@ -466,6 +622,32 @@ function ChatMessages({
             </div>
           </div>
         ))}
+        
+        {/* Lead Collection Call-to-Action */}
+        {showLeadForm && hasMultipleMessages && !hasSubmittedLead && !loading && (
+          <div className="flex justify-center animate-in fade-in zoom-in-95">
+            <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-4 max-w-md w-full">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <UserPlus className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-sm mb-1">Ready to get started?</h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Share your details and we'll help you get the best solution.
+                  </p>
+                  <button
+                    onClick={showLeadForm}
+                    className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Get Started Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {loading && status === 'streaming' && (
           <div className="flex items-center gap-3 animate-in fade-in">
@@ -538,6 +720,9 @@ interface ChatInputProps {
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onToggleMicrophone: () => void;
+  hasLeadForm?: boolean;
+  onShowLeadForm?: () => void;
+  isLoadingLeadConfig?: boolean;
 }
 
 function ChatInput({
@@ -552,24 +737,47 @@ function ChatInput({
   status,
   inputRef,
   onToggleMicrophone,
+  hasLeadForm,
+  onShowLeadForm,
+  isLoadingLeadConfig,
 }: ChatInputProps) {
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSubmit(e);
+  };
 
   return (
     <div className="border-t bg-background p-3">
-      <PromptInput onSubmit={onSubmit}>
+      <PromptInput onSubmit={handleFormSubmit}>
         <div className="flex items-end gap-2">
           <div className="flex-1">
             <PromptInputTextarea
               ref={inputRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Describe your dream property..."
+              placeholder="Type your message here..."
               disabled={loading || isMicrophoneOn}
               className="min-h-12 max-h-32"
               rows={1}
             />
             <PromptInputToolbar>
               <PromptInputTools>
+                {/* Lead Form Button */}
+                {hasLeadForm && onShowLeadForm && !isLoadingLeadConfig && (
+                  <PromptInputButton
+                    size="sm"
+                    variant="ghost"
+                    onClick={onShowLeadForm}
+                    title="Get started"
+                    className="text-xs hover:bg-primary/10 text-primary"
+                    disabled={loading}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Get Started</span>
+                  </PromptInputButton>
+                )}
+                
                 {browserSupportsSpeechRecognition && (
                   <PromptInputButton
                     size="sm"
@@ -577,6 +785,7 @@ function ChatInput({
                     onClick={onToggleMicrophone}
                     title={isMicrophoneOn ? "Stop voice input" : "Start voice input"}
                     className={isMicrophoneOn ? "bg-destructive/10 text-destructive" : ""}
+                    disabled={loading}
                   >
                     {isMicrophoneOn ? (
                       <>
@@ -597,9 +806,10 @@ function ChatInput({
                   onClick={onNewChat}
                   title="New chat"
                   className="text-xs hover:bg-primary/10"
+                  disabled={loading}
                 >
                   <RefreshCw className="h-4 w-4" />
-                  <span className="hidden sm:inline">New</span>
+                  <span className="hidden sm:inline">New Chat</span>
                 </PromptInputButton>
               </PromptInputTools>
             </PromptInputToolbar>
@@ -618,6 +828,14 @@ function ChatInput({
           </PromptInputSubmit>
         </div>
       </PromptInput>
+      
+      {/* Loading indicator for lead config */}
+      {isLoadingLeadConfig && (
+        <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Loading form configuration...
+        </div>
+      )}
     </div>
   );
-} 
+}

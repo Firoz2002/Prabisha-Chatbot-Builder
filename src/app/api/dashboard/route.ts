@@ -54,11 +54,6 @@ export async function GET(request: NextRequest) {
     const timeRange = searchParams.get('timeRange') || '7d';
     const { start, end } = getDateRange(timeRange);
 
-    // Get user ID from session (you'll need to implement auth)
-    // const session = await getServerSession();
-    // const userId = session?.user?.id;
-    // For now, we'll fetch all data, but you should filter by user/workspace
-
     // Fetch basic stats
     const [
       totalChatbots,
@@ -173,8 +168,9 @@ export async function GET(request: NextRequest) {
       }))
       .slice(0, 5); // Top 5 chatbots
 
-    // Get lead source distribution
-    const leadForms = await prisma.leadForm.findMany({
+    // --- FIX START: Changed LeadForm to LeadCollection ---
+    // Get lead source distribution (Updated to use LeadCollection)
+    const leadCollections = await prisma.leadCollection.findMany({
       include: {
         leads: {
           where: {
@@ -185,9 +181,9 @@ export async function GET(request: NextRequest) {
     });
 
     const leadSourceMap = new Map<string, number>();
-    leadForms.forEach((form) => {
-      const style = form.leadFormStyle;
-      leadSourceMap.set(style, (leadSourceMap.get(style) || 0) + form.leads.length);
+    leadCollections.forEach((collection) => {
+      const style = collection.leadFormStyle;
+      leadSourceMap.set(style, (leadSourceMap.get(style) || 0) + collection.leads.length);
     });
 
     const leadSourceData = Array.from(leadSourceMap.entries()).map(([name, value], index) => ({
@@ -195,6 +191,7 @@ export async function GET(request: NextRequest) {
       value,
       color: generateColor(index),
     }));
+    // --- FIX END ---
 
     // Get flow type distribution
     const flows = await prisma.flow.findMany({

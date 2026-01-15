@@ -1,4 +1,4 @@
-// lib/knowledge/vector-store.ts
+// lib/langchain/vector-store.ts
 import { MongoClient } from 'mongodb';
 import { TogetherAIEmbeddings } from "@langchain/community/embeddings/togetherai";
 

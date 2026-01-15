@@ -172,38 +172,40 @@ enum LeadFormStyle {
 }
 
 model LeadForm {
-  id            String   @id @default(cuid())
-  title         String   @default("Get started")
+  id            String        @id @default(cuid())
+  title         String        @default("Get started")
   description   String?
 
   fields        Json
-  leadTiming    LeadTiming @default(BEGINNING)
+  leadTiming    LeadTiming    @default(BEGINNING)
   leadFormStyle LeadFormStyle @default(EMBEDDED)
 
-  chatbotId String  @unique
-  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  chatbotId     String  @unique
+  chatbot       Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  leads         Lead[]
-
-  @@index([chatbotId])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Lead {
-  id           String   @id @default(cuid())
-  
-  data        Json
+  id             String   @id @default(cuid())
+  data           Json
 
-  formId      String
-  form        LeadForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId         String
+  form           LeadCollection @relation(fields: [formId], references: [id], onDelete: Cascade)
 
-  chatbotId String
-  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  chatbotId      String
+  chatbot        Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  conversationId String?   @unique 
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+   
+  @@index([formId])
+  @@index([chatbotId])
+  @@index([conversationId])
 }
 
 enum SenderType {
@@ -213,32 +215,29 @@ enum SenderType {
 
 // Add Conversation model
 model Conversation {
-  id        String    @id @default(cuid())
-  title     String?   // Optional title (could be first message or generated)
+  id        String   @id @default(cuid())
+  title     String?
   chatbotId String
-  userId    String?   // Optional user ID for user tracking
-  
-  // Status fields
-  isActive  Boolean   @default(true)
-  
-  // Metadata
-  metadata  Json?     // Additional metadata like browser info, location, etc.
+  userId    String?
+  leadId    String?  // Remove @unique from here since the relation is on Lead side
 
-  // Summary
-  summary   String?    @db.LongText
-  
+  isActive  Boolean  @default(true)
+  metadata  Json?
+  summary   String? @db.LongText
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  endedAt   DateTime? // When conversation was ended/archived
-  
-  // Relations
-  chatbot    Chatbot  @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-  messages   Message[] // Messages belong to a conversation
-  
+  endedAt   DateTime?
+
+  chatbot   Chatbot  @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  lead      Lead?    // One-to-one relation from Conversation side
+
   @@index([chatbotId])
   @@index([userId])
   @@index([isActive])
   @@index([createdAt])
+  @@index([leadId])
 }
 
 model Message {
@@ -325,26 +324,29 @@ enum NodeType {
 }
 
 model KnowledgeBase {
-  id        String   @id @default(cuid())
-  chatbotId String
-  name      String
-  type      KBType // PRODUCT, PAGE, FAQ, DOC
-  indexName String // vector index name
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  chatbotId   String
+  name        String
+  type        KBType // PRODUCT, PAGE, FAQ, DOC
+  autoUpdate  Boolean  @default(false)
+  indexName   String // vector index name
+  createdAt   DateTime @default(now())
 
-  chatbot   Chatbot    @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-  documents Document[]
+  chatbot     Chatbot    @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  documents   Document[]
 }
 
 model Document {
   id              String   @id @default(cuid())
   knowledgeBaseId String
-  source          String // url, pdf, product_id
+  source          String   @unique // url, pdf, product_id
   content         String   @db.LongText
   metadata        Json
   createdAt       DateTime @default(now())
 
   knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  
+  @@index([source])
 }
 
 enum KBType {
@@ -447,36 +449,35 @@ model MeetingSchedule {
 
 // Lead Collection Logic - Specific configuration for lead forms
 model LeadCollection {
-  id           String   @id @default(cuid())
-  logicId      String   @unique
+  id             String   @id @default(cuid())
+  logicId        String   @unique
   
-  formTitle    String   @default("Get Started")
-  formDesc     String?  @db.Text
+  formTitle      String   @default("Get Started")
+  formDesc       String?  @db.Text
   
-  leadTiming    LeadTiming @default(BEGINNING)
-  leadFormStyle LeadFormStyle @default(EMBEDDED)
-  cadence       Cadence @default(ALL_AT_ONCE)
+  leadTiming     LeadTiming    @default(BEGINNING)
+  leadFormStyle  LeadFormStyle @default(EMBEDDED)
+  cadence        Cadence       @default(ALL_AT_ONCE)
   
-  fields       String   @db.Text // JSON array of form fields
-  fieldOrder   String?  @db.Text // JSON array of field IDs for ordering
+  fields         String   @db.Text 
+  fieldOrder     String?  @db.Text 
   
-  // Success/Completion options
-  successMessage String? @db.Text
+  successMessage String?  @db.Text
   redirectUrl    String?
-  autoClose      Boolean @default(true)
-  showThankYou   Boolean @default(true)
+  autoClose      Boolean  @default(true)
+  showThankYou   Boolean  @default(true)
   
-  // Notification options
   notifyEmail    String?
   webhookUrl     String?
   
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   
-  logic Logic @relation(fields: [logicId], references: [id], onDelete: Cascade)
-  formFields FormField[] // Add this reverse relationship
+  logic          Logic        @relation(fields: [logicId], references: [id], onDelete: Cascade)
+  formFields     FormField[]
+  
+  leads          Lead[]       
 }
-
 // Form Field Definition (optional - can also store in JSON)
 model FormField {
   id              String   @id @default(cuid())

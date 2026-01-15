@@ -95,7 +95,7 @@ export function useKnowledgeUpload(chatbotId: string) {
     }
   };
 
-  const uploadWebpage = async (url: string, crawlSubpages: boolean, name?: string) => {
+  const uploadWebpage = async (url: string, crawlSubpages: boolean, autoUpdate: boolean) => {
     setUploading(true);
 
     try {
@@ -105,10 +105,10 @@ export function useKnowledgeUpload(chatbotId: string) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          type: 'webpage',
           url,
+          autoUpdate,
           crawlSubpages,
-          name,
+          type: 'webpage',
         }),
       });
 

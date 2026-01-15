@@ -12,6 +12,52 @@ interface RouterParams {
   params: Promise<{ id: string }>
 }
 
+export async function GET(request: NextRequest, context: RouterParams) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: chatbotId } = await context.params;
+
+    // Verify user has access to this chatbot
+    const chatbot = await prisma.chatbot.findFirst({
+      where: {
+        id: chatbotId,
+        workspace: {
+          members: {
+            some: {
+              userId: session.user.id,
+            },
+          },
+        },
+      },
+    });
+
+    if (!chatbot) {
+      return NextResponse.json({ error: 'Chatbot not found' }, { status: 404 });
+    }
+
+    const knowledgeBases = await prisma.knowledgeBase.findMany({
+      where: {
+        chatbotId,
+      },
+      include: {
+        documents: true,
+      }
+    });
+    if (!knowledgeBases) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    return NextResponse.json(knowledgeBases, { status: 200 });
+  } catch (error) {
+    console.error('Error fetching knowledge bases:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: NextRequest,
   context: RouterParams
@@ -47,7 +93,7 @@ export async function POST(
     // Handle JSON body for webpage scraping
     if (contentType.includes('application/json')) {
       const body = await request.json();
-      const { type, url, crawlSubpages, name } = body;
+      const { type, url, crawlSubpages, name, autoUpdate } = body;
 
       if (type !== 'webpage') {
         return NextResponse.json({ error: 'Invalid type for JSON request' }, { status: 400 });
@@ -61,6 +107,7 @@ export async function POST(
       const knowledgeBase = await prisma.knowledgeBase.create({
         data: {
           chatbotId,
+          autoUpdate,
           name: name || `Webpage - ${new Date().toLocaleDateString()}`,
           type: 'PAGE',
           indexName: `kb_${chatbotId}_${Date.now()}`,
@@ -71,7 +118,7 @@ export async function POST(
         console.log(`Starting scraping: ${url} (crawl: ${crawlSubpages})`);
         
         // Process URL with crawling option
-        const { content, metadata, pages } = await processURL(url, crawlSubpages, 50);
+        const { content, metadata, pages } = await processURL(url, crawlSubpages, 200);
         console.log(`Finished scraping: ${url} (crawl: ${crawlSubpages})`);
 
         if (pages && pages.length > 0) {

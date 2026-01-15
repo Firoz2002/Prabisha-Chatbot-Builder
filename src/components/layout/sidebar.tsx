@@ -3,27 +3,21 @@
 import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
 import {
-  AudioWaveform,
+  LogOut,
   BookOpen,
   Bot,
   Cable,
-  Command,
   Drill,
-  Frame,
   GalleryVerticalEnd,
   Gauge,
-  LayoutDashboard,
   Map,
   MessageCircle,
   Moon,
   Palette,
-  PieChart,
   ScrollText,
   Settings2,
-  SlidersHorizontal,
   SquareTerminal,
   Sun,
-  UsersRound,
 } from "lucide-react"
 import {
   Sidebar,
@@ -50,13 +44,6 @@ import {
   SidebarMenuAction,
 } from "@/components/ui/sidebar"
 import { ChevronRight, type LucideIcon, Plus, ChevronsUpDown } from "lucide-react"
-import {
-  BadgeCheck,
-  Bell,
-  CreditCard,
-  LogOut,
-  Sparkles,
-} from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -18,7 +18,7 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ data: newConversation }, { status: 201});
+    return NextResponse.json(newConversation);
 
   } catch (error) {
     console.error('Chat error:', error);

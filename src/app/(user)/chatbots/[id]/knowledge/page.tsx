@@ -1,44 +1,45 @@
 "use client"
+
 import { useParams } from "next/navigation"
 import { useState, useCallback, useEffect } from "react"
 import { useDropzone } from "react-dropzone"
 import { useKnowledgeUpload } from "@/hooks/useKnowledgeUpload"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+
+// Icons - Aliased to prevent conflicts with standard Types
 import { 
   Plus, 
   Globe, 
-  FileUp, 
   Table as TableIcon, 
   FileText, 
-  AlertCircle, 
   X, 
   Upload, 
-  File, 
+  File as FileIcon, // FIX: Aliased to avoid conflict with 'File' type
   CheckCircle2, 
   Loader2, 
   Trash2, 
-  ExternalLink,
   Book,
   Package,
   Globe as WebIcon,
   FileQuestion,
   Calendar,
-  ChevronRight
+  ChevronDown,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 
-// Type for knowledge base
+// --- Helper for conditional classes (removes dependency on @/lib/utils) ---
+function cn(...classes: (string | undefined | null | false)[]) {
+  return classes.filter(Boolean).join(" ")
+}
+
+// --- Types ---
 interface KnowledgeBase {
   id: string
   name: string
@@ -53,7 +54,6 @@ interface KnowledgeBase {
   }>
 }
 
-// Type for document
 interface Document {
   id: string
   source: string
@@ -61,17 +61,150 @@ interface Document {
   createdAt: string
 }
 
+// --- Sub-Component: Knowledge Base Item (Collapsible) ---
+const KnowledgeBaseItem = ({ 
+  kb, 
+  onDeleteKb, 
+  onDeleteDoc 
+}: { 
+  kb: KnowledgeBase, 
+  onDeleteKb: (kb: KnowledgeBase) => void, 
+  onDeleteDoc: (kbId: string, doc: Document) => void 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Get icon for KB type
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'PRODUCT': return <Package className="w-4 h-4" />
+      case 'PAGE': return <WebIcon className="w-4 h-4" />
+      case 'FAQ': return <FileQuestion className="w-4 h-4" />
+      case 'DOC': return <FileText className="w-4 h-4" />
+      default: return <Book className="w-4 h-4" />
+    }
+  }
+
+  return (
+    <div className="border rounded-md bg-card transition-all hover:shadow-sm">
+      {/* Header / Trigger */}
+      <div 
+        className={cn(
+          "flex items-center justify-between p-4 cursor-pointer hover:bg-accent/50 transition-colors",
+          isOpen ? "border-b bg-accent/20" : ""
+        )}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-9 h-9 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            {getTypeIcon(kb.type)}
+          </div>
+          <div>
+            <h4 className="font-medium text-sm text-foreground flex items-center gap-2">
+              {kb.name || "Untitled Knowledge Base"}
+            </h4>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                {kb.createdAt ? formatDistanceToNow(new Date(kb.createdAt), { addSuffix: true }) : 'Just now'}
+              </span>
+              <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+              <span className="flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                {kb.documents?.length || 0} items
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteKb(kb);
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <div className={cn("text-muted-foreground transition-transform duration-200", isOpen ? "rotate-180" : "")}>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+        </div>
+      </div>
+
+      {/* Collapsible Content */}
+      {isOpen && (
+        <div className="bg-muted/10 animate-in slide-in-from-top-2 duration-200">
+          {kb.documents && kb.documents.length > 0 ? (
+            <div className="border-t-0">
+               <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-border/50">
+                    <TableHead className="pl-6 h-9 text-xs">Source Name</TableHead>
+                    <TableHead className="h-9 text-xs">Type</TableHead>
+                    <TableHead className="pr-6 text-right h-9 text-xs">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {kb.documents.map((doc) => (
+                    <TableRow key={doc.id} className="hover:bg-muted/50 border-border/50">
+                      <TableCell className="pl-6 font-medium max-w-[300px] truncate py-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          {doc.metadata?.url ? (
+                            <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          ) : (
+                            <FileIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className="truncate" title={doc.metadata?.fileName || doc.source}>
+                            {doc.metadata?.fileName || doc.source}
+                          </span>
+                        </div>
+                      </TableCell>
+                       <TableCell className="py-3 text-xs text-muted-foreground">
+                        {doc.metadata?.url ? "Webpage" : "File"}
+                       </TableCell>
+                      <TableCell className="pr-6 text-right py-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => onDeleteDoc(kb.id, doc)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-sm text-muted-foreground italic">
+              No documents found in this knowledge base.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Main Page Component ---
 export default function KnowledgePage() {
   const params = useParams();
   const chatbotId = params.id as string;
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedType, setSelectedType] = useState("webpage")
-  const [crawlSubpages, setCrawlSubpages] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState("webpage");
+
+  const [webpageUrl, setWebpageUrl] = useState("");
+  const [sourceName, setSourceName] = useState(""); // Kept sourceName state even if not used in UI for future use
+  const [autoUpdate, setAutoUpdate] = useState(false);
+  const [crawlSubpages, setCrawlSubpages] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [uploadedTables, setUploadedTables] = useState<File[]>([])
-  const [webpageUrl, setWebpageUrl] = useState("")
-  const [sourceName, setSourceName] = useState("")
   
   // State for knowledge bases
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
@@ -88,7 +221,7 @@ export default function KnowledgePage() {
       setLoading(true)
       const response = await fetch(`/api/chatbots/${chatbotId}/knowledge`)
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json();
         setKnowledgeBases(data)
       }
     } catch (error) {
@@ -123,7 +256,6 @@ export default function KnowledgePage() {
       })
       
       if (response.ok) {
-        // Update local state
         setKnowledgeBases(prev => 
           prev.map(kb => 
             kb.id === kbId 
@@ -200,7 +332,7 @@ export default function KnowledgePage() {
         reset()
         fetchKnowledgeBases()
       } else if (selectedType === 'webpage' && webpageUrl) {
-        await uploadWebpage(webpageUrl, crawlSubpages, sourceName)
+        await uploadWebpage(webpageUrl, crawlSubpages, autoUpdate)
         setWebpageUrl('')
         setIsDialogOpen(false)
         fetchKnowledgeBases()
@@ -218,350 +350,172 @@ export default function KnowledgePage() {
     return false
   }
 
-  // Get icon for KB type
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'PRODUCT':
-        return <Package className="w-4 h-4" />
-      case 'PAGE':
-        return <WebIcon className="w-4 h-4" />
-      case 'FAQ':
-        return <FileQuestion className="w-4 h-4" />
-      case 'DOC':
-        return <FileText className="w-4 h-4" />
-      default:
-        return <Book className="w-4 h-4" />
-    }
-  }
-
-  // Get badge color for KB type
-  const getTypeBadgeVariant = (type: string) => {
-    switch (type) {
-      case 'PRODUCT':
-        return 'default'
-      case 'PAGE':
-        return 'secondary'
-      case 'FAQ':
-        return 'outline'
-      case 'DOC':
-        return 'destructive'
-      default:
-        return 'secondary'
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-linear-to-br from-background via-background to-muted/20">
-      <div className="max-w-7xl mx-auto p-6 md:p-8 lg:p-12">
-        <div className="mb-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <FileText className="w-6 h-6 text-primary" />
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight">Knowledge Base</h1>
-          </div>
-          <p className="text-lg text-muted-foreground max-w-3xl leading-relaxed">
-            Train your chatbot on knowledge that is unique to your project or business.
-          </p>
-        </div>
+    <>
+      <div className="w-full max-w-5xl mx-auto space-y-6 pb-12">
+        {/* Header Section */}
+        <Button onClick={() => setIsDialogOpen(true)} className="shadow-sm w-full">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Source
+        </Button>
 
-        {/* Add Knowledge Source Card */}
-        <Card className="p-8 border-2 bg-linear-to-br from-primary/5 via-background to-background mb-8">
-          <h2 className="text-2xl font-semibold mb-4">Get Started</h2>
-          <p className="text-muted-foreground mb-6 leading-relaxed">
-            Start by connecting public links, tables, and files.
-          </p>
-          <Button onClick={() => setIsDialogOpen(true)} size="lg" className="w-full sm:w-auto">
-            <Plus className="w-5 h-5 mr-2" />
-            Add Knowledge Source
-          </Button>
-        </Card>
-
-        {/* Existing Knowledge Bases Section */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold">Knowledge Bases</h2>
-              <p className="text-muted-foreground">
-                All knowledge sources connected to your chatbot
-              </p>
-            </div>
-            <Badge variant="outline" className="px-3 py-1">
-              {knowledgeBases.length} {knowledgeBases.length === 1 ? 'source' : 'sources'}
-            </Badge>
-          </div>
-
+        {/* Knowledge Bases List */}
+        <div className="space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">Loading knowledge bases...</span>
+            <div className="flex flex-col items-center justify-center py-20 bg-muted/5 rounded-md border border-dashed">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
+              <span className="text-sm text-muted-foreground">Syncing knowledge base...</span>
             </div>
           ) : knowledgeBases.length === 0 ? (
-            <Card className="p-12 text-center border-dashed border-2">
-              <Book className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No knowledge bases yet</h3>
-              <p className="text-muted-foreground mb-6">
-                Add your first knowledge source to train your chatbot
+            <div className="flex flex-col items-center justify-center py-16 text-center border rounded-md bg-muted/5 border-dashed">
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Book className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium mb-1">No knowledge sources yet</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mb-6">
+                Connect a website, upload a document, or add a table to train your chatbot.
               </p>
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Knowledge Source
+              <Button variant="outline" onClick={() => setIsDialogOpen(true)}>
+                Add your first source
               </Button>
-            </Card>
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {knowledgeBases.map((kb) => (
-                <Card key={kb.id} className="overflow-hidden">
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          {getTypeIcon(kb.type)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold">{kb.name}</h3>
-                            <Badge variant={getTypeBadgeVariant(kb.type)}>
-                              {kb.type}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {formatDistanceToNow(new Date(kb.createdAt), { addSuffix: true })}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <FileText className="w-3 h-3" />
-                              {kb.documents.length} {kb.documents.length === 1 ? 'document' : 'documents'}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Book className="w-3 h-3" />
-                              {kb.indexName}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setKbToDelete(kb)
-                                setDeleteDialogOpen(true)
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Delete knowledge base</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-
-                    {/* Documents Table */}
-                    {kb.documents.length > 0 && (
-                      <div className="mt-4 border rounded-lg">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Source</TableHead>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Added</TableHead>
-                              <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {kb.documents.map((doc) => (
-                              <TableRow key={doc.id}>
-                                <TableCell className="font-medium max-w-xs truncate">
-                                  <div className="flex items-center gap-2">
-                                    {doc.metadata?.url ? (
-                                      <ExternalLink className="w-3 h-3" />
-                                    ) : (
-                                      <File className="w-3 h-3" />
-                                    )}
-                                    <span className="truncate">
-                                      {doc.metadata?.fileName || doc.source}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="capitalize">
-                                    {doc.metadata?.type || 'unknown'}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      setDocToDelete({ kbId: kb.id, doc })
-                                      setDeleteDialogOpen(true)
-                                    }}
-                                  >
-                                    <Trash2 className="w-4 h-4 text-destructive" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </div>
-                </Card>
+                <KnowledgeBaseItem 
+                  key={kb.id} 
+                  kb={kb} 
+                  onDeleteKb={(k) => {
+                    setKbToDelete(k)
+                    setDeleteDialogOpen(true)
+                  }}
+                  onDeleteDoc={(kbId, doc) => {
+                    setDocToDelete({ kbId, doc })
+                    setDeleteDialogOpen(true)
+                  }}
+                />
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Add Knowledge Source Dialog */}
+      {/* ADD SOURCE DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-semibold">Add Knowledge Source</DialogTitle>
-            <DialogDescription>
-              Upload files or connect webpages to train your chatbot.
-            </DialogDescription>
+            <DialogTitle>Add Knowledge Source</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Source Name */}
             <div className="space-y-3">
-              <Label htmlFor="source-name" className="text-base font-semibold">
-                Source Name (Optional)
-              </Label>
-              <Input
-                id="source-name"
-                placeholder="e.g., Product Documentation"
-                value={sourceName}
-                onChange={(e) => setSourceName(e.target.value)}
-                className="h-12"
-              />
-            </div>
-
-            {/* Type Selector */}
-            <div className="space-y-3">
-              <Label htmlFor="type" className="text-base font-semibold">
-                Source Type
-              </Label>
-              <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger id="type" className="h-12">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="webpage">
-                    <div className="flex items-center gap-3 py-1">
-                      <Globe className="w-5 h-5" />
-                      <span className="font-medium">Webpage</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="file">
-                    <div className="flex items-center gap-3 py-1">
-                      <FileText className="w-5 h-5" />
-                      <span className="font-medium">File</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="table">
-                    <div className="flex items-center gap-3 py-1">
-                      <TableIcon className="w-5 h-5" />
-                      <span className="font-medium">Table</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-semibold uppercase text-muted-foreground">Source Type</Label>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { id: "webpage", icon: Globe, label: "Webpage" },
+                  { id: "file", icon: FileText, label: "File" },
+                  { id: "table", icon: TableIcon, label: "Table" },
+                ].map((type) => (
+                  <div 
+                    key={type.id}
+                    onClick={() => setSelectedType(type.id)}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-4 gap-2 rounded-md border cursor-pointer transition-all hover:bg-muted/50",
+                      selectedType === type.id 
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/20" 
+                        : "border-border bg-background"
+                    )}
+                  >
+                    <type.icon className={cn("w-6 h-6", selectedType === type.id ? "text-primary" : "text-muted-foreground")} />
+                    <span className={cn("text-sm font-medium", selectedType === type.id ? "text-primary" : "text-foreground")}>
+                      {type.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Webpage URL Input */}
             {selectedType === "webpage" && (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  <Label htmlFor="url" className="text-base font-semibold">
-                    Website URL
-                  </Label>
+              <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="space-y-2">
+                  <Label htmlFor="url">Website URL</Label>
                   <Input
                     id="url"
                     type="url"
                     placeholder="https://example.com"
                     value={webpageUrl}
                     onChange={(e) => setWebpageUrl(e.target.value)}
-                    className="h-12"
                   />
+                  <p className="text-[0.8rem] text-muted-foreground">Publicly accessible URL to index.</p>
                 </div>
-                <Card className="p-4 bg-muted/50">
-                  <div className="flex items-start space-x-3">
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex items-start space-x-3 p-3 rounded-md border">
                     <Checkbox
                       id="crawl-subpages"
                       checked={crawlSubpages}
                       onCheckedChange={(checked) => setCrawlSubpages(checked === true)}
-                      className="mt-1"
                     />
-                    <div className="flex-1">
-                      <Label htmlFor="crawl-subpages" className="text-sm font-medium cursor-pointer">
-                        Crawl all subpages
+                    <div className="space-y-1 leading-none">
+                      <Label htmlFor="crawl-subpages" className="font-medium cursor-pointer">
+                        Crawl Subpages
                       </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Automatically discover and index all linked pages
+                      <p className="text-xs text-muted-foreground">
+                        Index all links found on this page.
                       </p>
                     </div>
                   </div>
-                </Card>
+
+                  <div className="flex items-start space-x-3 p-3 rounded-md border">
+                    <Checkbox
+                      id="auto-update"
+                      checked={autoUpdate}
+                      onCheckedChange={(checked) => setAutoUpdate(checked === true)}
+                    />
+                    <div className="space-y-1 leading-none">
+                      <Label htmlFor="auto-update" className="font-medium cursor-pointer">
+                        Auto-Sync
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Re-crawl periodically.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* File Upload */}
+            {/* File Upload UI */}
             {selectedType === "file" && (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold">Upload Files</Label>
-                  <div
-                    {...getFileRootProps()}
-                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
-                      isFileDragActive
-                        ? "border-primary bg-primary/5"
-                        : "border-muted-foreground/25 hover:border-primary/50"
-                    }`}
-                  >
-                    <input {...getFileInputProps()} />
-                    <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-lg font-medium mb-2">
-                      {isFileDragActive ? "Drop files here..." : "Drag & drop files here"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Supports: .txt, .csv, .pdf, .doc, .docx (Max 2MB)
-                    </p>
-                  </div>
+              <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div
+                  {...getFileRootProps()}
+                  className={cn(
+                    "border border-dashed rounded-md p-8 text-center cursor-pointer transition-colors",
+                    isFileDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
+                  )}
+                >
+                  <input {...getFileInputProps()} />
+                  <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
+                  <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                  <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, TXT (Max 2MB)</p>
                 </div>
 
                 {uploadedFiles.length > 0 && (
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Selected Files ({uploadedFiles.length})</Label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">Ready to Upload</Label>
+                    <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
                       {uploadedFiles.map((file, index) => (
-                        <Card key={index} className="p-3 flex items-center gap-3 group">
-                          <File className="w-5 h-5 text-primary" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {(file.size / 1024).toFixed(2)} KB
-                            </p>
+                        <div key={index} className="flex items-center justify-between p-2 border rounded-md bg-muted/10 text-sm">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <FileIcon className="w-4 h-4 text-primary shrink-0" />
+                            <span className="truncate font-medium">{file.name}</span>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeFile(index)}
-                          >
-                            <X className="w-4 h-4" />
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removeFile(index)}>
+                            <X className="w-3 h-3" />
                           </Button>
-                        </Card>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -569,51 +523,36 @@ export default function KnowledgePage() {
               </div>
             )}
 
-            {/* Table Upload */}
+            {/* Table Upload UI */}
             {selectedType === "table" && (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold">Upload Table Files</Label>
-                  <div
-                    {...getTableRootProps()}
-                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
-                      isTableDragActive
-                        ? "border-primary bg-primary/5"
-                        : "border-muted-foreground/25 hover:border-primary/50"
-                    }`}
-                  >
-                    <input {...getTableInputProps()} />
-                    <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-lg font-medium mb-2">
-                      {isTableDragActive ? "Drop table files..." : "Drag & drop table files"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Supports: .csv, .xls, .xlsx, .sql (Max 5MB)
-                    </p>
-                  </div>
+              <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div
+                  {...getTableRootProps()}
+                  className={cn(
+                    "border border-dashed rounded-md p-8 text-center cursor-pointer transition-colors",
+                    isTableDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
+                  )}
+                >
+                  <input {...getTableInputProps()} />
+                  <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
+                  <p className="text-sm font-medium">Click to upload structured data</p>
+                  <p className="text-xs text-muted-foreground mt-1">CSV, XLS, XLSX (Max 5MB)</p>
                 </div>
 
                 {uploadedTables.length > 0 && (
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Selected Tables ({uploadedTables.length})</Label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <Label className="text-xs font-semibold uppercase text-muted-foreground">Ready to Upload</Label>
+                    <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
                       {uploadedTables.map((file, index) => (
-                        <Card key={index} className="p-3 flex items-center gap-3 group">
-                          <TableIcon className="w-5 h-5 text-primary" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {(file.size / 1024).toFixed(2)} KB
-                            </p>
+                        <div key={index} className="flex items-center justify-between p-2 border rounded-md bg-muted/10 text-sm">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <TableIcon className="w-4 h-4 text-primary shrink-0" />
+                            <span className="truncate font-medium">{file.name}</span>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeTable(index)}
-                          >
-                            <X className="w-4 h-4" />
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removeTable(index)}>
+                            <X className="w-3 h-3" />
                           </Button>
-                        </Card>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -623,23 +562,19 @@ export default function KnowledgePage() {
 
             {/* Upload Progress */}
             {uploading && progress.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Upload Progress</Label>
+              <div className="space-y-3 pt-2">
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">Processing</Label>
                 {progress.map((item, idx) => (
-                  <Card key={idx} className="p-3">
-                    <div className="flex items-center gap-3 mb-2">
-                      {item.status === 'success' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                      {item.status === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
-                      {(item.status === 'uploading' || item.status === 'processing') && (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      )}
-                      <span className="text-sm font-medium flex-1">{item.fileName}</span>
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                            {item.status === 'success' ? <CheckCircle2 className="w-3 h-3 text-green-500"/> : <Loader2 className="w-3 h-3 animate-spin"/>}
+                            <span className="truncate max-w-[200px]">{item.fileName}</span>
+                        </div>
+                        <span>{item.progress}%</span>
                     </div>
-                    <Progress value={item.progress} className="h-2" />
-                    {item.error && (
-                      <p className="text-xs text-red-500 mt-1">{item.error}</p>
-                    )}
-                  </Card>
+                    <Progress value={item.progress} className="h-1" />
+                  </div>
                 ))}
               </div>
             )}
@@ -650,14 +585,8 @@ export default function KnowledgePage() {
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={!canSubmit() || uploading}>
-              {uploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                'Continue'
-              )}
+              {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {uploading ? 'Processing...' : 'Add Source'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -667,20 +596,12 @@ export default function KnowledgePage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {kbToDelete ? 'Delete Knowledge Base' : 'Delete Document'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              {kbToDelete ? (
-                <>
-                  Are you sure you want to delete the knowledge base <strong>"{kbToDelete.name}"</strong>? 
-                  This will delete all documents in this knowledge base and cannot be undone.
-                </>
-              ) : (
-                <>
-                  Are you sure you want to delete this document? This action cannot be undone.
-                </>
-              )}
+              {kbToDelete 
+                ? `This will permanently delete "${kbToDelete.name}" and remove all associated documents from the index.`
+                : "This will permanently remove this document from the knowledge base."
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -698,13 +619,13 @@ export default function KnowledgePage() {
                   deleteDocument(docToDelete.kbId, docToDelete.doc.id)
                 }
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   )
 }
