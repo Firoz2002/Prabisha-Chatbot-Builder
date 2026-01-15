@@ -1,6 +1,8 @@
 // app/api/leads/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
@@ -108,20 +110,87 @@ export async function POST(
   }
 }
 
-export async function GET(
-  request: NextRequest,
-) {
+export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+        
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get the user first to get their ID
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
-    const chatbotId = searchParams.get('chatbotId') as string;
+    const chatbotId = searchParams.get('chatbotId'); // Optional: filter by specific chatbot
+    
+    // PAGINATION
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const skip = (page - 1) * limit;
 
+    // BUILD WHERE CLAUSE
+    let whereClause: any = {};
+
+    if (chatbotId) {
+      // Option 1: Fetch leads for a specific chatbot (if user has access to it)
+      whereClause = {
+        chatbotId,
+        chatbot: {
+          workspace: {
+            members: {
+              some: {
+                userId: user.id
+              }
+            }
+          }
+        }
+      };
+    } else {
+      // Option 2: Fetch ALL leads from all chatbots the user has access to
+      whereClause = {
+        chatbot: {
+          workspace: {
+            members: {
+              some: {
+                userId: user.id
+              }
+            }
+          }
+        }
+      };
+    }
+
+    // EXECUTE QUERY
     const [leads, total] = await Promise.all([
       prisma.lead.findMany({
-        where: { chatbotId },
+        where: whereClause,
         include: {
+          chatbot: {
+            select: {
+              id: true,
+              name: true,
+              workspace: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          },
           form: {
             include: {
               formFields: true,
@@ -130,6 +199,7 @@ export async function GET(
           conversation: {
             select: {
               id: true,
+              title: true,
               createdAt: true,
             },
           },
@@ -139,7 +209,7 @@ export async function GET(
         take: limit,
       }),
       prisma.lead.count({
-        where: { chatbotId },
+        where: whereClause,
       }),
     ]);
 
