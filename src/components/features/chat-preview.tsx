@@ -1,5 +1,5 @@
 "use client";
-
+import DOMPurify from 'dompurify';
 import { useState, useRef, useEffect } from "react";
 
 import { Card } from "@/components/ui/card"
@@ -43,6 +43,8 @@ interface ChatProps {
   // Optional: If you want to disable database fetching
   useDbConfig?: boolean
 }
+
+const sanitizedHTML = (html: string) => DOMPurify.sanitize(html);
 
 export default function ChatPreview({
   id,
@@ -466,7 +468,7 @@ export default function ChatPreview({
             <Card 
               className={`p-4 max-w-md ${
                 msg.role === "user" 
-                  ? `text-white bg-primary border-primary` 
+                  ? `text-black bg-primary border-primary` 
                   : theme === "dark" 
                     ? "bg-card text-card-foreground" 
                     : "bg-card"
@@ -476,7 +478,11 @@ export default function ChatPreview({
                 backgroundColor: msg.role === "user" ? getColorValue() : undefined
               }}
             >
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              <div className="text-sm whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ 
+                  __html: sanitizedHTML(msg.content).replace(/<a /g, `<a target="_blank" rel="noopener noreferrer" `)
+                }}
+              />
             </Card>
           </div>
         ))}

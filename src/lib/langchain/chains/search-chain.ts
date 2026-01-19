@@ -39,7 +39,7 @@ Output format (one per line):
 2. [variation]
 3. [variation]`;
 
-// Improved RAG prompt with HTML formatting instructions
+// Improved RAG prompt with STRICT HTML formatting instructions
 const RAG_ANSWER_PROMPT = `You are a knowledgeable assistant. Use the CONTEXT below to answer the user's question.
 
 IMPORTANT RULES:
@@ -50,13 +50,14 @@ IMPORTANT RULES:
 5. Only say "I don't have information" if context is completely irrelevant
 6. Use a helpful, conversational tone - not overly cautious
 
-FORMATTING INSTRUCTIONS:
-- Use HTML formatting for better readability
-- Use <strong> for important points
-- Use <ul> and <li> for lists
-- Use <p> for paragraphs
-- Use <br> for line breaks when needed
-- DO NOT mention sources or URLs in your response (they will be added automatically)
+CRITICAL FORMATTING RULES - FOLLOW EXACTLY:
+- Wrap each paragraph in <p> tags with NO extra newlines
+- Use <ul><li> for bullet lists (NO newlines between items)
+- Use <strong> only for truly important keywords
+- DO NOT add extra <br> tags or newlines
+- DO NOT add blank lines between elements
+- Keep HTML compact and clean
+- DO NOT mention sources or URLs (they will be added automatically)
 
 CONTEXT (from knowledge base):
 {context}
@@ -66,18 +67,20 @@ CONVERSATION HISTORY:
 
 USER QUESTION: {question}
 
-Provide a clear, helpful answer in HTML format:`;
+Provide a clear, helpful answer. Output ONLY clean, compact HTML with no extra spacing:`;
 
 // Fallback prompt when no knowledge base context found
 const GENERAL_ANSWER_PROMPT = `{systemPrompt}
 
 You're having a conversation with a user. They may ask about services, features, or general questions.
 
-FORMATTING INSTRUCTIONS:
-- Use HTML formatting for better readability
-- Use <strong> for emphasis
-- Use <ul> and <li> for lists
-- Use <p> for paragraphs
+CRITICAL FORMATTING RULES - FOLLOW EXACTLY:
+- Wrap each paragraph in <p> tags with NO extra newlines
+- Use <ul><li> for bullet lists (NO newlines between items)
+- Use <strong> only for truly important keywords
+- DO NOT add extra <br> tags or newlines
+- DO NOT add blank lines between elements
+- Keep HTML compact and clean
 
 CONVERSATION HISTORY:
 {history}
@@ -86,7 +89,7 @@ CONVERSATION HISTORY:
 
 USER: {question}
 
-ASSISTANT (be helpful and conversational, respond in HTML):`;
+ASSISTANT - Output ONLY clean, compact HTML with no extra spacing:`;
 
 export async function rewriteQuery(userMessage: string): Promise<string[]> {
   try {
@@ -113,11 +116,14 @@ export async function rewriteQuery(userMessage: string): Promise<string[]> {
   }
 }
 
-// Enhanced search with multiple queries and lower threshold
+// Enhanced search with multiple queries and source URL collection
 export async function searchKnowledgeBases(
   chatbot: any, 
   queries: string[]
-): Promise<{ context: string; sources: Array<{ title: string; url: string; score: number }> }> {
+): Promise<{ 
+  context: string; 
+  sources: Array<{ title: string; url: string; score: number }> 
+}> {
   if (!chatbot.knowledgeBases?.length) return { context: '', sources: [] };
 
   const allResults: any[] = [];
@@ -132,9 +138,17 @@ export async function searchKnowledgeBases(
           query,
           chatbotId: chatbot.id,
           knowledgeBaseId: kb.id,
-          limit: 8,
-          threshold: 0.55,
+          limit: 12,
+          threshold: 0.3,
         });
+        
+        console.log(`📊 ${kb.name} (query: "${query}"): ${results.length} results`);
+        
+        // Log scores for debugging
+        if (results.length > 0) {
+          const topScores = results.slice(0, 3).map(r => r.score.toFixed(3)).join(', ');
+          console.log(`   Top scores: ${topScores}`);
+        }
         
         // Deduplicate by content hash and collect URLs
         for (const result of results) {
@@ -147,37 +161,53 @@ export async function searchKnowledgeBases(
               query: query
             });
             
-            // Collect source URLs from metadata
-            if (result.metadata?.url) {
-              const url = result.metadata.url;
-              const existingSource = sourceUrls.get(url);
+            // Extract URL and title from metadata
+            // Based on your structure: metadata has type, title, source, etc. at root level
+            let sourceUrl = result.metadata?.source || result.metadata?.url;
+            let sourceTitle = result.metadata?.title || result.metadata?.filename || kb.name;
+            
+            console.log(`   📄 Result metadata:`, {
+              hasSource: !!result.metadata?.source,
+              hasUrl: !!result.metadata?.url,
+              title: result.metadata?.title,
+              source: result.metadata?.source?.substring(0, 50)
+            });
+            
+            // Collect source URLs (must be valid HTTP/HTTPS URLs)
+            if (sourceUrl && (sourceUrl.startsWith('http://') || sourceUrl.startsWith('https://'))) {
+              const existingSource = sourceUrls.get(sourceUrl);
               if (!existingSource || result.score > existingSource.score) {
-                sourceUrls.set(url, {
-                  title: result.metadata.title || kb.name,
-                  url: url,
+                sourceUrls.set(sourceUrl, {
+                  title: sourceTitle || 'Untitled Source',
+                  url: sourceUrl,
                   score: result.score
                 });
+                console.log(`   ✅ Collected source: ${sourceTitle} (${sourceUrl.substring(0, 50)}...)`);
               }
+            } else {
+              console.log(`   ⚠️ Skipped invalid source URL:`, sourceUrl);
             }
           }
         }
-        
-        console.log(`📊 ${kb.name} (query: "${query}"): ${results.length} results`);
       } catch (error) {
         console.error(`❌ ${kb.name}:`, error);
       }
     }
   }
 
-  if (!allResults.length) return { context: '', sources: [] };
+  if (!allResults.length) {
+    console.log('❌ No results found');
+    return { context: '', sources: [] };
+  }
 
   // Sort by score
   allResults.sort((a, b) => (b.score || 0) - (a.score || 0));
   
   // Take top results with diversity
-  const top = selectDiverseResults(allResults, 10);
+  const top = selectDiverseResults(allResults, 15);
   
   console.log(`✅ Selected ${top.length} diverse results for context`);
+  console.log(`   Score range: ${top[0]?.score.toFixed(3)} - ${top[top.length-1]?.score.toFixed(3)}`);
 
   // Format with more structure
   const formatted = top.map((r, i) => {
@@ -188,10 +218,15 @@ export async function searchKnowledgeBases(
 
   const context = `KNOWLEDGE BASE CONTEXT:\n\n${formatted}\n\n(Total sources: ${top.length})`;
   
-  // Get top 3 unique source URLs sorted by score
+  // Get top 5 unique source URLs sorted by score
   const sources = Array.from(sourceUrls.values())
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
+    .slice(0, 5);
+  
+  console.log(`🔗 Found ${sources.length} unique source URLs`);
+  sources.forEach((s, i) => {
+    console.log(`   ${i + 1}. ${s.title} (${s.score.toFixed(3)})`);
+  });
 
   return { context, sources };
 }
@@ -215,7 +250,7 @@ function selectDiverseResults(results: any[], limit: number): any[] {
     const novelty = newTerms.length / Math.max(terms.length, 1);
     
     // Include if high score OR adds novelty
-    if (result.score > 0.7 || novelty > 0.3 || selected.length < 3) {
+    if (result.score > 0.5 || novelty > 0.3 || selected.length < 5) {
       selected.push(result);
       newTerms.forEach((t: string) => keywords.add(t));
     }
@@ -282,32 +317,80 @@ export async function checkLogicTriggers(chatbot: any, message: string) {
   return triggered;
 }
 
+// Clean and normalize HTML output
+function cleanHtmlResponse(html: string): string {
+  let cleaned = html;
+  
+  // Remove excessive newlines and whitespace between tags
+  cleaned = cleaned.replace(/>\s+</g, '><');
+  
+  // Remove leading/trailing whitespace
+  cleaned = cleaned.trim();
+  
+  // Ensure proper spacing after closing tags
+  cleaned = cleaned.replace(/<\/p>/g, '</p>');
+  cleaned = cleaned.replace(/<\/li>/g, '</li>');
+  cleaned = cleaned.replace(/<\/ul>/g, '</ul>');
+  cleaned = cleaned.replace(/<\/ol>/g, '</ol>');
+  
+  // Remove multiple consecutive <br> tags
+  cleaned = cleaned.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+  
+  // Remove <br> at the start or end
+  cleaned = cleaned.replace(/^<br\s*\/?>/i, '');
+  cleaned = cleaned.replace(/<br\s*\/?>$/i, '');
+  
+  // Add consistent spacing between paragraphs
+  cleaned = cleaned.replace(/<\/p><p>/g, '</p><p style="margin-top: 12px;">');
+  
+  // Add consistent spacing for lists
+  cleaned = cleaned.replace(/<ul>/g, '<ul style="margin: 12px 0; padding-left: 24px;">');
+  cleaned = cleaned.replace(/<ol>/g, '<ol style="margin: 12px 0; padding-left: 24px;">');
+  cleaned = cleaned.replace(/<li>/g, '<li style="margin-bottom: 6px;">');
+  
+  // Ensure first paragraph has no top margin
+  cleaned = cleaned.replace(/^<p style="margin-top: 12px;">/, '<p>');
+  
+  // Wrap in container if not already wrapped
+  if (!cleaned.startsWith('<div') && !cleaned.startsWith('<p')) {
+    cleaned = `<div style="line-height: 1.6; color: #1f2937;">${cleaned}</div>`;
+  } else if (cleaned.startsWith('<p')) {
+    cleaned = `<div style="line-height: 1.6; color: #1f2937;">${cleaned}</div>`;
+  }
+  
+  return cleaned;
+}
+
 // Convert plain text to HTML if needed
 function ensureHtmlFormat(text: string): string {
-  // If already has HTML tags, return as is
+  // If already has HTML tags, just clean it
   if (/<[^>]+>/.test(text)) {
     return text;
   }
   
   // Convert plain text to basic HTML
-  const paragraphs = text.split('\n\n');
-  return paragraphs
-    .map(p => {
-      // Check if it's a list
-      if (p.includes('\n- ') || p.includes('\n• ')) {
-        const items = p.split('\n').filter(line => line.trim());
-        const listItems = items
-          .filter(item => item.startsWith('- ') || item.startsWith('• '))
-          .map(item => `<li>${item.substring(2).trim()}</li>`)
-          .join('');
-        return `<ul>${listItems}</ul>`;
-      }
-      return `<p>${p.trim()}</p>`;
-    })
-    .join('');
+  const paragraphs = text.split('\n\n').filter(p => p.trim());
+  
+  return paragraphs.map(p => {
+    // Check if it's a list
+    if (p.includes('\n- ') || p.includes('\n• ')) {
+      const lines = p.split('\n').filter(line => line.trim());
+      const listItems = lines
+        .filter(item => item.trim().startsWith('- ') || item.trim().startsWith('• '))
+        .map(item => {
+          const content = item.replace(/^[-•]\s*/, '').trim();
+          return `<li style="margin-bottom: 6px;">${content}</li>`;
+        })
+        .join('');
+      return `<ul style="margin: 12px 0; padding-left: 24px;">${listItems}</ul>`;
+    }
+    
+    // Regular paragraph
+    return `<p style="margin-top: 12px;">${p.trim()}</p>`;
+  }).join('');
 }
 
-// Add "Read More" section with source URLs
+// Enhanced "Read More" section with better styling
 function appendReadMoreSection(
   htmlResponse: string, 
   sources: Array<{ title: string; url: string }>
@@ -315,22 +398,22 @@ function appendReadMoreSection(
   if (!sources.length) return htmlResponse;
   
   const readMoreSection = `
-<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e5e7eb;">
-  <p style="font-weight: 600; color: #374151; margin-bottom: 10px;">📚 Read More:</p>
-  <ul style="list-style: none; padding: 0; margin: 0;">
+<div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+  <div style="font-weight: 600; color: #374151; margin-bottom: 10px; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+    <span>📚</span>
+    <span>Learn More</span>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 8px;">
     ${sources.map(source => `
-      <li style="margin-bottom: 8px;">
-        <a href="${source.url}" 
-           target="_blank" 
-           rel="noopener noreferrer"
-           style="color: #2563eb; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: color 0.2s;">
-          <span style="font-size: 14px;">🔗</span>
-          <span style="font-size: 14px; border-bottom: 1px solid transparent; transition: border-color 0.2s;">${source.title}</span>
-          <span style="font-size: 12px; color: #9ca3af;">↗</span>
-        </a>
-      </li>
-    `).join('')}
-  </ul>
+    <a href="${source.url}" 
+       target="_blank" 
+       rel="noopener noreferrer"
+       style="color: #2563eb; text-decoration: none; font-size: 14px; display: flex; align-items: center; gap: 6px; padding: 4px 0; transition: opacity 0.2s;">
+      <span style="opacity: 0.6;">🔗</span>
+      <span style="border-bottom: 1px solid transparent; transition: border-color 0.2s; flex: 1;">${source.title}</span>
+      <span style="font-size: 11px; opacity: 0.5;">↗</span>
+    </a>`).join('')}
+  </div>
 </div>`;
 
   return htmlResponse + readMoreSection;
@@ -399,12 +482,14 @@ export async function generateRAGResponse(
 
     const response = text.trim();
     
-    // Ensure HTML formatting
+    // Ensure HTML formatting and clean it
     let htmlResponse = ensureHtmlFormat(response);
+    htmlResponse = cleanHtmlResponse(htmlResponse);
     
     // Add "Read More" section with source URLs
     if (sources.length > 0) {
       htmlResponse = appendReadMoreSection(htmlResponse, sources);
+      console.log(`✅ Added ${sources.length} source links to response`);
     }
     
     console.log('🤖 Response length:', response.length, 'chars');
@@ -549,7 +634,7 @@ export async function simpleSearch(
         chatbotId: chatbot.id,
         knowledgeBaseId: kb.id,
         limit: options?.limit || 8,
-        threshold: options?.threshold || 0.55,
+        threshold: options?.threshold || 0.3,
       });
       
       for (const result of results) {

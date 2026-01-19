@@ -8,6 +8,11 @@ import { embedAndStore } from '@/lib/langchain/vector-store';
 import { processURL } from '@/lib/langchain/knowledge/web-scraper';
 import { processFile, processTable } from '@/lib/langchain/knowledge/processor';
 
+const config = {
+  runtime: 'nodejs',
+  maxDuration: 60,
+};
+
 interface RouterParams {
   params: Promise<{ id: string }>
 }
@@ -118,7 +123,7 @@ export async function POST(
         console.log(`Starting scraping: ${url} (crawl: ${crawlSubpages})`);
         
         // Process URL with crawling option
-        const { content, metadata, pages } = await processURL(url, crawlSubpages, 10);
+        const { content, metadata, pages } = await processURL(url, crawlSubpages, 200);
         console.log(`Finished scraping: ${url} (crawl: ${crawlSubpages})`);
 
         if (pages && pages.length > 0) {

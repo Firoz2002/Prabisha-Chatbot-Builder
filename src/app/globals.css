@@ -134,3 +134,147 @@
       scrollbar-width: none;  /* Firefox */
   }
 }
+
+/* Add this CSS to your chat component to ensure consistent message styling */
+
+.chat-message {
+  line-height: 1.6;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+/* Paragraph spacing */
+.chat-message p {
+  margin: 0 0 12px 0;
+}
+
+.chat-message p:last-child {
+  margin-bottom: 0;
+}
+
+/* List spacing */
+.chat-message ul,
+.chat-message ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.chat-message li {
+  margin-bottom: 6px;
+}
+
+.chat-message li:last-child {
+  margin-bottom: 0;
+}
+
+/* Strong/bold text */
+.chat-message strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Links */
+.chat-message a {
+  color: #2563eb;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.chat-message a:hover {
+  border-bottom-color: #2563eb;
+}
+
+/* Remove extra spacing */
+.chat-message > *:first-child {
+  margin-top: 0 !important;
+}
+
+.chat-message > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Code blocks (if needed) */
+.chat-message code {
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.chat-message pre {
+  background-color: #f3f4f6;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.chat-message pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+/* Blockquotes (if needed) */
+.chat-message blockquote {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 12px;
+  margin: 12px 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Tables (if needed) */
+.chat-message table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.chat-message th,
+.chat-message td {
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.chat-message th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+/* Headings in messages (if needed) */
+.chat-message h1,
+.chat-message h2,
+.chat-message h3,
+.chat-message h4,
+.chat-message h5,
+.chat-message h6 {
+  margin: 16px 0 8px 0;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.chat-message h1 { font-size: 24px; }
+.chat-message h2 { font-size: 20px; }
+.chat-message h3 { font-size: 18px; }
+.chat-message h4 { font-size: 16px; }
+.chat-message h5 { font-size: 14px; }
+.chat-message h6 { font-size: 14px; }
+
+.chat-message h1:first-child,
+.chat-message h2:first-child,
+.chat-message h3:first-child,
+.chat-message h4:first-child,
+.chat-message h5:first-child,
+.chat-message h6:first-child {
+  margin-top: 0;
+}
+
+/* Horizontal rules */
+.chat-message hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 16px 0;
+}
