@@ -1,17 +1,11 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider     = "prisma-client"
-  output       = "../generated/prisma"
-  moduleFormat = "cjs"
+  provider      = "prisma-client"
+  output        = "../generated/prisma"
+  moduleFormat  = "cjs"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
 }
 
 enum Role {
@@ -66,12 +60,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  resetToken       String? // Optional, stores token
-  resetTokenExpiry DateTime? // Expiry timestamp
+  resetToken       String?
+  resetTokenExpiry DateTime?
 
-  accounts        Account[]
-  sessions        Session[]
-  workspaces      WorkspaceMember[]
+  accounts   Account[]
+  sessions   Session[]
+  workspaces WorkspaceMember[]
 }
 
 model Workspace {
@@ -115,31 +109,31 @@ enum BorderType {
 }
 
 model Chatbot {
-  id           String  @id @default(cuid())
-  name         String
-  description  String?
-  suggestions  Json?
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  suggestions String[]
 
-  theme        String?
+  theme String?
 
-  icon         String?
-  iconSize     Int?
-  iconColor    String?
-  iconShape    ShapeType @default(ROUND)
-  iconBorder   BorderType @default(FLAT)
-  iconBgColor  String?
+  icon        String?
+  iconSize    Int?
+  iconColor   String?
+  iconShape   ShapeType  @default(ROUND)
+  iconBorder  BorderType @default(FLAT)
+  iconBgColor String?
 
-  avatar       String?
-  avatarSize   Int?
-  avatarColor  String?
-  avatarBorder BorderType @default(FLAT)
+  avatar        String?
+  avatarSize    Int?
+  avatarColor   String?
+  avatarBorder  BorderType @default(FLAT)
   avatarBgColor String?
 
   popup_onload Boolean @default(false)
 
-  greeting     String  @default("Hi there! How can I help you today?")
-  directive    String  @db.LongText 
-  
+  greeting  String @default("Hi there! How can I help you today?")
+  directive String @db.Text
+
   model       String @default("meta-llama/Llama-3.3-70B-Instruct-Turbo")
   max_tokens  Int    @default(500)
   temperature Float  @default(0.7)
@@ -147,12 +141,12 @@ model Chatbot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  form          LeadForm? 
-  leads         Lead[]           
-  flows         Flow[]
-  conversations Conversation[]
+  form           LeadForm?
+  leads          Lead[]
+  conversations  Conversation[]
   knowledgeBases KnowledgeBase[]
-  logics        Logic[]
+  logics         Logic[]
+  documentVectors DocumentVector[]
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
@@ -171,41 +165,45 @@ enum LeadFormStyle {
   MESSAGES
 }
 
+model Lead {
+  id   String @id @default(cuid())
+  data Json
+
+  formId String
+  form   LeadForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  chatbotId String
+  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  conversationId String?       @unique
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([formId])
+  @@index([chatbotId])
+  @@index([conversationId])
+}
+
 model LeadForm {
-  id            String        @id @default(cuid())
-  title         String        @default("Get started")
-  description   String?
+  id          String  @id @default(cuid())
+  title       String  @default("Get started")
+  description String?
 
   fields        Json
   leadTiming    LeadTiming    @default(BEGINNING)
   leadFormStyle LeadFormStyle @default(EMBEDDED)
 
-  chatbotId     String  @unique
-  chatbot       Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  chatbotId String  @unique
+  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-model Lead {
-  id             String   @id @default(cuid())
-  data           Json
+  leads Lead[]
 
-  formId         String
-  form           LeadCollection @relation(fields: [formId], references: [id], onDelete: Cascade)
-
-  chatbotId      String
-  chatbot        Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-
-  conversationId String?   @unique 
-  conversation   Conversation? @relation(fields: [conversationId], references: [id])
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-   
-  @@index([formId])
   @@index([chatbotId])
-  @@index([conversationId])
 }
 
 enum SenderType {
@@ -213,25 +211,24 @@ enum SenderType {
   BOT
 }
 
-// Add Conversation model
 model Conversation {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   title     String?
   chatbotId String
   userId    String?
-  leadId    String?  // Remove @unique from here since the relation is on Lead side
+  leadId    String?
 
-  isActive  Boolean  @default(true)
-  metadata  Json?
-  summary   String? @db.LongText
+  isActive Boolean @default(true)
+  metadata Json?
+  summary  String? @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   endedAt   DateTime?
 
-  chatbot   Chatbot  @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-  messages  Message[]
-  lead      Lead?    // One-to-one relation from Conversation side
+  chatbot  Chatbot   @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  messages Message[]
+  lead     Lead?
 
   @@index([chatbotId])
   @@index([userId])
@@ -241,111 +238,46 @@ model Conversation {
 }
 
 model Message {
-  id             String     @id @default(cuid())
-  content        String     @db.LongText
-  senderType     SenderType
-  
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id         String     @id @default(cuid())
+  content    String     @db.Text
+  senderType SenderType
 
-  conversationId  String 
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade) // Add this relation
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([createdAt])
   @@index([senderType])
 }
 
-enum FlowType {
-  INTEND
-  PRODUCT
-  PAGE
-  FAQ
-  SUPPORT
-  CUSTOM
-}
-
-model Flow {
-  id        String   @id @default(cuid())
-  name      String
-  type      FlowType
-  createdAt DateTime @default(now())
-
-  chatbotId String
-  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-  nodes     Node[]
-  edges     Edge[]
-}
-
-model Node {
-  id     String @id @default(cuid())
-  flowId String
-
-  type      NodeType
-  name      String
-  config    Json // node-specific config
-  positionX Float
-  positionY Float
-
-  createdAt DateTime @default(now())
-
-  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
-
-  outgoing Edge[] @relation("OutgoingEdges")
-  incoming Edge[] @relation("IncomingEdges")
-
-  @@index([flowId])
-}
-
-model Edge {
-  id     String @id @default(cuid())
-  flowId String
-
-  sourceId String
-  targetId String
-
-  condition Json?
-
-  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
-
-  source Node @relation("OutgoingEdges", fields: [sourceId], references: [id])
-  target Node @relation("IncomingEdges", fields: [targetId], references: [id])
-
-  @@index([flowId])
-}
-
-enum NodeType {
-  TRIGGER
-  LLM
-  TOOL
-  CONDITION
-  MEMORY
-  OUTPUT
-}
-
 model KnowledgeBase {
-  id          String   @id @default(cuid())
-  chatbotId   String
-  name        String
-  type        KBType // PRODUCT, PAGE, FAQ, DOC
-  autoUpdate  Boolean  @default(false)
-  indexName   String // vector index name
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  chatbotId  String
+  name       String
+  type       KBType
+  autoUpdate Boolean  @default(false)
+  indexName  String
+  createdAt  DateTime @default(now())
 
-  chatbot     Chatbot    @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-  documents   Document[]
+  chatbot   Chatbot    @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  documents Document[]
+  documentVectors DocumentVector[]
 }
 
 model Document {
   id              String   @id @default(cuid())
   knowledgeBaseId String
-  source          String   @unique // url, pdf, product_id
-  content         String   @db.LongText
+  source          String   @unique
+  content         String   @db.Text
   metadata        Json
   createdAt       DateTime @default(now())
 
   knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  
+  documentVectors DocumentVector[]
+
   @@index([source])
 }
 
@@ -356,150 +288,139 @@ enum KBType {
   DOC
 }
 
-// Logic Model - Main table for all logic features
 model Logic {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   chatbotId String
   type      LogicType
-  
+
   // Basic info
-  name      String
+  name        String
   description String?
-  
-  // Configuration data (can store partial config here)
-  config    Json     // Store common configuration as JSON
-  
+
+  // Configuration data
+  config Json
+
   // Activation rules
-  triggerType    TriggerType @default(KEYWORD)
-  keywords       String?     @db.Text // JSON array of keywords
-  showAlways     Boolean     @default(false)
-  showAtEnd      Boolean     @default(false)
-  showOnButton   Boolean     @default(false)
-  triggerConfig  Json?       // Additional trigger configuration
-  
+  triggerType   TriggerType @default(KEYWORD)
+  keywords      String[]    @db.Text
+  showAlways    Boolean     @default(false)
+  showAtEnd     Boolean     @default(false)
+  showOnButton  Boolean     @default(false)
+  triggerConfig Json?
+
   // Status
-  isActive       Boolean     @default(true)
-  position       Int?        // For ordering/priority
-  
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  
+  isActive Boolean @default(true)
+  position Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  chatbot        Chatbot     @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-  linkButton     LinkButton? // Optional one-to-one for link button logic
-  meetingSchedule MeetingSchedule? // Optional one-to-one for meeting logic
-  leadCollection LeadCollection? // Optional one-to-one for lead collection
-  
-  @@index([chatbotId])
-  @@index([type])
-  @@index([isActive])
-  @@index([position])
+  chatbot         Chatbot          @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+  linkButton      LinkButton?
+  meetingSchedule MeetingSchedule?
+  leadCollection  LeadCollection?
 }
 
-// Link Button Logic - Specific configuration for link buttons
 model LinkButton {
-  id        String   @id @default(cuid())
-  logicId   String   @unique
-  
-  buttonText    String
-  buttonIcon    String?    // Icon name (e.g., "Calendar", "Link", etc.)
-  buttonLink    String
-  openInNewTab  Boolean    @default(true)
-  
+  id      String @id @default(cuid())
+  logicId String @unique
+
+  buttonText   String
+  buttonIcon   String?
+  buttonLink   String
+  openInNewTab Boolean @default(true)
+
   // Styling options
-  buttonColor   String?    @default("#3b82f6")
-  textColor     String?    @default("#ffffff")
-  buttonSize    ButtonSize @default(MEDIUM)
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
+  buttonColor String?    @default("#3b82f6")
+  textColor   String?    @default("#ffffff")
+  buttonSize  ButtonSize @default(MEDIUM)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   logic Logic @relation(fields: [logicId], references: [id], onDelete: Cascade)
 }
 
-// Meeting Schedule Logic - Specific configuration for meeting scheduling
 model MeetingSchedule {
-  id           String   @id @default(cuid())
-  logicId      String   @unique
-  
+  id      String @id @default(cuid())
+  logicId String @unique
+
   calendarType CalendarType @default(CALENDLY)
   calendarLink String
-  calendarId   String?  // For Google/Outlook calendar integration
-  
+  calendarId   String?
+
   // Meeting options
-  duration     Int?     @default(30) // minutes
-  timezone     String?  @default("UTC")
-  titleFormat  String?  @default("Meeting with {company}")
-  description  String?  @db.Text
-  
+  duration    Int?    @default(30)
+  timezone    String? @default("UTC")
+  titleFormat String? @default("Meeting with {company}")
+  description String? @db.Text
+
   // Availability settings
-  availabilityDays  String? @db.Text // JSON array of days [0-6]
-  availabilityHours String? @db.Text // JSON object with start/end times
-  bufferTime        Int?    @default(5) // minutes
-  
+  availabilityDays  String? @db.Text
+  availabilityHours String? @db.Text
+  bufferTime        Int?    @default(5)
+
   // Display options
   showTimezoneSelector Boolean @default(true)
   requireConfirmation  Boolean @default(false)
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   logic Logic @relation(fields: [logicId], references: [id], onDelete: Cascade)
 }
 
-// Lead Collection Logic - Specific configuration for lead forms
 model LeadCollection {
-  id             String   @id @default(cuid())
-  logicId        String   @unique
-  
-  formTitle      String   @default("Get Started")
-  formDesc       String?  @db.Text
-  
-  leadTiming     LeadTiming    @default(BEGINNING)
-  leadFormStyle  LeadFormStyle @default(EMBEDDED)
-  cadence        Cadence       @default(ALL_AT_ONCE)
-  
-  fields         String   @db.Text 
-  fieldOrder     String?  @db.Text 
-  
-  successMessage String?  @db.Text
+  id      String @id @default(cuid())
+  logicId String @unique
+
+  formTitle String  @default("Get Started")
+  formDesc  String? @db.Text
+
+  leadTiming    LeadTiming    @default(BEGINNING)
+  leadFormStyle LeadFormStyle @default(EMBEDDED)
+  cadence       Cadence       @default(ALL_AT_ONCE)
+
+  fields     String  @db.Text
+  fieldOrder String? @db.Text
+
+  successMessage String? @db.Text
   redirectUrl    String?
-  autoClose      Boolean  @default(true)
-  showThankYou   Boolean  @default(true)
-  
-  notifyEmail    String?
-  webhookUrl     String?
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
-  logic          Logic        @relation(fields: [logicId], references: [id], onDelete: Cascade)
-  formFields     FormField[]
-  
-  leads          Lead[]       
+  autoClose      Boolean @default(true)
+  showThankYou   Boolean @default(true)
+
+  notifyEmail String?
+  webhookUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logic      Logic       @relation(fields: [logicId], references: [id], onDelete: Cascade)
+  formFields FormField[]
 }
-// Form Field Definition (optional - can also store in JSON)
+
 model FormField {
-  id              String   @id @default(cuid())
+  id               String @id @default(cuid())
   leadCollectionId String
-  
+
   type            FieldType
   label           String
-  required        Boolean  @default(true)
+  required        Boolean   @default(true)
   placeholder     String?
   defaultValue    String?
-  validationRules String?  @db.Text // JSON validation rules
-  
+  validationRules String?   @db.Text
+
   // For select/radio/checkbox fields
-  options         String?  @db.Text // JSON array of options
-  
-  order           Int      @default(0)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  options String? @db.Text
+
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   leadCollection LeadCollection @relation(fields: [leadCollectionId], references: [id], onDelete: Cascade)
-  
+
   @@index([leadCollectionId])
   @@index([order])
 }
@@ -508,9 +429,9 @@ enum LogicType {
   COLLECT_LEADS
   LINK_BUTTON
   SCHEDULE_MEETING
-  ZAPIER_INTEGRATION   // For future features
-  SUGGESTIONS          // For future features
-  CUSTOM_ACTION        // For future features
+  ZAPIER_INTEGRATION
+  SUGGESTIONS
+  CUSTOM_ACTION
 }
 
 enum TriggerType {
@@ -518,8 +439,8 @@ enum TriggerType {
   ALWAYS
   MANUAL
   END_OF_CONVERSATION
-  MESSAGE_COUNT        // Trigger after X messages
-  TIME_DELAY           // Trigger after X seconds/minutes
+  MESSAGE_COUNT
+  TIME_DELAY
 }
 
 enum ButtonSize {
@@ -554,4 +475,27 @@ enum FieldType {
   CHECKBOX
   TEXTAREA
   MULTISELECT
+}
+
+// Vector storage model for PostgreSQL pgvector extension
+model DocumentVector {
+  id              String   @id @default(cuid())
+  documentId      String
+  knowledgeBaseId String
+  chatbotId       String
+  chunkIndex      Int
+  content         String   @db.Text
+  embedding       Unsupported("vector(768)")? // pgvector type
+  metadata        Json
+  createdAt       DateTime @default(now())
+
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  document      Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chatbot       Chatbot       @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([chatbotId])
+  @@index([knowledgeBaseId])
+  @@index([documentId])
+  @@index([createdAt])
 }

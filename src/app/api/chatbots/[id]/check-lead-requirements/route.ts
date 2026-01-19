@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 interface RouterParams {
   params: Promise<{ id: string }>;
@@ -64,7 +64,7 @@ export async function GET(
       });
 
       if (lastMessage && lastMessage.senderType === 'USER' && leadLogic.keywords) {
-        const keywords: string[] = JSON.parse(leadLogic.keywords);
+        const keywords: string[] = leadLogic.keywords;
         const content = lastMessage.content.toLowerCase();
         
         const matches = keywords.some(keyword => 

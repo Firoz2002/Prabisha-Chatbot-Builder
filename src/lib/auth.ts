@@ -6,7 +6,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import type { User } from 'next-auth';
 
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 export const authOptions: AuthOptions = {
   debug: true,

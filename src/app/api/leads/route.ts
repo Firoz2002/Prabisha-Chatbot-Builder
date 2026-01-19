@@ -1,8 +1,16 @@
 // app/api/leads/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+
+// Helper type for the JSON fields in LeadForm
+interface FormFieldJson {
+  id: string;
+  label: string;
+  required: boolean;
+  type: string;
+}
 
 export async function POST(
   request: NextRequest,
@@ -19,26 +27,27 @@ export async function POST(
       );
     }
 
-    // Get lead collection config to validate fields
-    const leadCollection = await prisma.leadCollection.findUnique({
+    // Get lead form (Corrected from LeadCollection to LeadForm to match Lead relation)
+    const leadForm = await prisma.leadForm.findUnique({
       where: { id: formId },
-      include: {
-        formFields: true,
-      },
     });
 
-    if (!leadCollection) {
+    if (!leadForm) {
       return NextResponse.json(
         { error: 'Lead form not found' },
         { status: 404 }
       );
     }
 
-    // Validate required fields
+    // Validate required fields based on JSON structure
     const errors: Record<string, string> = {};
-    for (const field of leadCollection.formFields) {
-      if (field.required && !data[field.id]) {
-        errors[field.id] = `${field.label} is required`;
+    const fields = leadForm.fields as unknown as FormFieldJson[];
+
+    if (Array.isArray(fields)) {
+      for (const field of fields) {
+        if (field.required && !data[field.id]) {
+          errors[field.id] = `${field.label} is required`;
+        }
       }
     }
 
@@ -84,21 +93,17 @@ export async function POST(
       });
     }
 
-    // Send notifications if configured
-    if (leadCollection.notifyEmail) {
-      // TODO: Implement email notification
-      console.log('Email notification:', leadCollection.notifyEmail);
+    // Send notifications if configured (LeadForm doesn't have notifyEmail in schema provided, but kept logic if schema updates)
+    // Note: If you want these fields, add them to LeadForm in schema.prisma
+    /* if (leadForm.notifyEmail) {
+      console.log('Email notification:', leadForm.notifyEmail);
     }
-
-    if (leadCollection.webhookUrl) {
-      // TODO: Implement webhook
-      console.log('Webhook:', leadCollection.webhookUrl);
-    }
+    */
 
     return NextResponse.json({
       success: true,
       leadId: lead.id,
-      successMessage: leadCollection.successMessage || 'Thank you! We\'ll be in touch soon.',
+      successMessage: 'Thank you! We\'ll be in touch soon.', // Default message as LeadForm might not have successMessage
     });
 
   } catch (error) {
@@ -135,7 +140,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const chatbotId = searchParams.get('chatbotId'); // Optional: filter by specific chatbot
+    const chatbotId = searchParams.get('chatbotId'); 
     
     // PAGINATION
     const page = parseInt(searchParams.get('page') || '1');
@@ -146,7 +151,7 @@ export async function GET(request: NextRequest) {
     let whereClause: any = {};
 
     if (chatbotId) {
-      // Option 1: Fetch leads for a specific chatbot (if user has access to it)
+      // Option 1: Fetch leads for a specific chatbot
       whereClause = {
         chatbotId,
         chatbot: {
@@ -191,11 +196,10 @@ export async function GET(request: NextRequest) {
               }
             }
           },
-          form: {
-            include: {
-              formFields: true,
-            },
-          },
+          // --- FIX APPLIED HERE ---
+          // Removed 'include: { formFields: true }' because Lead relates to LeadForm, 
+          // which has 'fields' (JSON), not a relation to 'formFields'.
+          form: true, 
           conversation: {
             select: {
               id: true,

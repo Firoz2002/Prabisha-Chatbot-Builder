@@ -1,6 +1,6 @@
 // app/api/chatbots/[chatbotId]/lead-config/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 interface RouterParams {
   params: Promise<{ id: string }>;
@@ -46,7 +46,7 @@ export async function GET(
     let triggerKeywords: string[] = [];
     if (leadLogic.keywords) {
       try {
-        triggerKeywords = JSON.parse(leadLogic.keywords);
+        triggerKeywords = leadLogic.keywords;
       } catch (e) {
         console.error('Error parsing keywords:', e);
       }

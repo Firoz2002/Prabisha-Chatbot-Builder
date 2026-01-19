@@ -2,7 +2,7 @@
 import { searchSimilar } from '@/lib/langchain/vector-store';
 import { createTogetherAI } from '@ai-sdk/togetherai';
 import { generateText } from 'ai';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 export interface SearchChainConfig {
   chatbotId: string;

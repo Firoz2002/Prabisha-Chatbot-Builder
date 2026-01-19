@@ -1,7 +1,7 @@
 // app/api/chatbot/[id]/logic/[logicId]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { LogicConfig } from '@/types/logic';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 interface RouterParams {
   params: Promise<{ id: string; logicId: string }>;
@@ -35,7 +35,7 @@ export async function PUT(
         name: body.name,
         description: body.description,
         triggerType: body.triggerType,
-        keywords: body.keywords ? JSON.stringify(body.keywords) : null,
+        keywords: body.keywords,
         showAlways: body.showAlways || false,
         showAtEnd: body.showAtEnd || false,
         showOnButton: body.showOnButton || false,

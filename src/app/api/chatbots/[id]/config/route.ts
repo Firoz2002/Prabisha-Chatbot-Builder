@@ -1,6 +1,6 @@
 // app/api/chatbots/[chatbotId]/config/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 interface RouterParams {
   params: Promise<{id: string}>
@@ -84,17 +84,6 @@ export async function GET(
         console.error('Error parsing suggestions:', error);
       }
     }
-
-    // Get active flows
-    const flows = await prisma.flow.findMany({
-      where: {
-        chatbotId: id,
-      },
-      include: {
-        nodes: true,
-        edges: true,
-      }
-    });
 
     // Format response
     const response = {
@@ -208,15 +197,6 @@ export async function GET(
             return baseLogic;
         }
       }),
-      
-      // Flows
-      flows: flows.map(flow => ({
-        id: flow.id,
-        name: flow.name,
-        type: flow.type,
-        nodes: flow.nodes,
-        edges: flow.edges,
-      })),
     };
 
     return NextResponse.json(response);

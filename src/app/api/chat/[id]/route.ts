@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma';
 import cloudinary, { upload } from '@/lib/cloudinary'
 
 interface RouterParams {
@@ -209,13 +209,10 @@ export async function DELETE(request: NextRequest, context: RouterParams) {
       prisma.meetingSchedule.deleteMany({ where: { logic: { chatbotId: id } } }),
       prisma.leadCollection.deleteMany({ where: { logic: { chatbotId: id } } }),
       prisma.message.deleteMany({ where: { conversation: { chatbotId: id } } }),
-      prisma.node.deleteMany({ where: { flow: { chatbotId: id } } }),
-      prisma.edge.deleteMany({ where: { flow: { chatbotId: id } } }),
-      
+
       // 2. Direct related records
       prisma.lead.deleteMany({ where: { chatbotId: id } }),
       prisma.leadForm.deleteMany({ where: { chatbotId: id } }),
-      prisma.flow.deleteMany({ where: { chatbotId: id } }),
       prisma.conversation.deleteMany({ where: { chatbotId: id } }),
       prisma.knowledgeBase.deleteMany({ where: { chatbotId: id } }),
       prisma.logic.deleteMany({ where: { chatbotId: id } }),

@@ -1,16 +1,15 @@
 // lib/langchain/vector-store.ts
-import { MongoClient } from 'mongodb';
 import { TogetherAIEmbeddings } from "@langchain/community/embeddings/togetherai";
+import { prisma } from "@/lib/prisma";
 
-const mongoClient = new MongoClient(process.env.MONGODB_URI!);
-let isConnected = false;
-
-async function connectMongo() {
-  if (!isConnected) {
-    await mongoClient.connect();
-    isConnected = true;
+// Enable vector extension in your database
+export async function enableVectorExtension() {
+  try {
+    await prisma.$executeRaw`CREATE EXTENSION IF NOT EXISTS vector`;
+    console.log('PostgreSQL vector extension enabled');
+  } catch (error) {
+    console.error('Error enabling vector extension:', error);
   }
-  return mongoClient;
 }
 
 interface EmbedAndStoreParams {
@@ -32,47 +31,72 @@ export async function embedAndStore({
     // Split content into chunks
     const chunks = chunkText(content, 1000);
     
-    const client = await connectMongo();
-    const db = client.db('chatbot_vectors');
-    const collection = db.collection('knowledge_vectors');
-    
-    // Create vector search index if it doesn't exist
-    await ensureVectorIndex(collection);
+    console.log(`Generating embeddings for ${chunks.length} chunks...`);
     
     // Generate embeddings for all chunks
-    const embeddings = await Promise.all(
-      chunks.map(chunk => generateEmbedding(chunk))
-    );
+    const embeddingsPromises = chunks.map(chunk => generateEmbedding(chunk));
+    const embeddings = await Promise.all(embeddingsPromises);
     
-    // Prepare documents with chatbotId and knowledgeBaseId
-    const documents = chunks.map((chunk, idx) => ({
-      documentId,
-      knowledgeBaseId,
-      chatbotId,
-      chunkIndex: idx,
-      content: chunk,
-      embedding: embeddings[idx],
-      metadata: {
+    console.log(`Storing ${chunks.length} chunks in PostgreSQL...`);
+    
+    // Store using raw SQL (required for vector type with Prisma)
+    let storedCount = 0;
+    
+    for (let idx = 0; idx < chunks.length; idx++) {
+      const metadataObj = {
         ...metadata,
         chatbotId,
         knowledgeBaseId,
         documentId,
-      },
-      createdAt: new Date(),
-    }));
-
-    console.log(`Storing ${documents.length} chunks in MongoDB...`);
+        chunkIndex: idx,
+      };
+      
+      try {
+        // Use raw SQL to insert with vector type
+        await prisma.$executeRaw`
+          INSERT INTO "DocumentVector" (
+            "id",
+            "documentId",
+            "knowledgeBaseId",
+            "chatbotId",
+            "chunkIndex",
+            "content",
+            "embedding",
+            "metadata",
+            "createdAt"
+          ) VALUES (
+            gen_random_uuid()::text,
+            ${documentId},
+            ${knowledgeBaseId},
+            ${chatbotId},
+            ${idx},
+            ${chunks[idx]},
+            ${`[${embeddings[idx].join(',')}]`}::vector(768),
+            ${JSON.stringify(metadataObj)}::jsonb,
+            NOW()
+          )
+          ON CONFLICT ("documentId", "chunkIndex")
+          DO UPDATE SET
+            "content" = EXCLUDED."content",
+            "embedding" = EXCLUDED."embedding",
+            "metadata" = EXCLUDED."metadata",
+            "createdAt" = NOW()
+        `;
+        storedCount++;
+      } catch (error) {
+        console.error(`Error storing chunk ${idx}:`, error);
+        throw error;
+      }
+    }
     
-    // Insert documents
-    const result = await collection.insertMany(documents);
+    console.log(`Successfully stored ${storedCount} chunks in PostgreSQL`);
     
     return {
       documentId,
-      chunksStored: chunks.length,
-      insertedIds: result.insertedIds,
+      chunksStored: storedCount,
     };
   } catch (error) {
-    console.error('Error storing data:', error);
+    console.error('Error storing data in PostgreSQL:', error);
     throw new Error('Failed to store data');
   }
 }
@@ -87,6 +111,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     });
 
     const embedding = await embeddings.embedQuery(text);
+    console.log('Generated embedding with length:', embedding.length);
     return embedding;
   } catch (error) {
     console.error('Error generating embedding:', error);
@@ -117,62 +142,62 @@ export async function searchSimilar({
     // Generate embedding for the query
     const queryEmbedding = await generateEmbedding(query);
     
-    const client = await connectMongo();
-    const db = client.db('chatbot_vectors');
-    const collection = db.collection('knowledge_vectors');
+    // Build the SQL query with vector similarity search
+    const knowledgeBaseFilter = knowledgeBaseId 
+      ? `AND "knowledgeBaseId" = '${knowledgeBaseId}'` 
+      : '';
     
-    // Build the pipeline
-    const pipeline: any[] = [
-      {
-        $vectorSearch: {
-          index: 'knowledge_vectors_index',
-          path: 'embedding',
-          queryVector: queryEmbedding,
-          numCandidates: limit * 10,
-          limit: limit * 3, // Get more initially for filtering
-          filter: {
-            chatbotId: chatbotId,
-            ...(knowledgeBaseId && { knowledgeBaseId: knowledgeBaseId }),
-            ...filters,
-          },
-        },
-      },
-      {
-        $project: {
-          _id: 1,
-          documentId: 1,
-          knowledgeBaseId: 1,
-          chatbotId: 1,
-          chunkIndex: 1,
-          content: 1,
-          metadata: 1,
-          score: { $meta: 'vectorSearchScore' },
-        },
-      },
-      {
-        $match: {
-          score: { $gte: threshold },
-        },
-      },
-      {
-        $limit: limit,
-      },
-    ];
+    // Add additional filters
+    const additionalFilters = Object.entries(filters)
+      .map(([key, value]) => {
+        if (typeof value === 'string') {
+          return `AND metadata->>'${key}' = '${value}'`;
+        }
+        return `AND metadata->>'${key}' = '${JSON.stringify(value)}'`;
+      })
+      .join(' ');
     
-    console.log('Running pipeline:', JSON.stringify(pipeline, null, 2));
+    // Use cosine distance for similarity (1 - cosine_similarity)
+    const sqlQuery = `
+      SELECT 
+        "id",
+        "documentId",
+        "knowledgeBaseId",
+        "chatbotId",
+        "chunkIndex",
+        "content",
+        "metadata",
+        "createdAt",
+        1 - (embedding <=> '[${queryEmbedding.join(',')}]'::vector) as similarity
+      FROM "DocumentVector"
+      WHERE "chatbotId" = '${chatbotId}'
+        ${knowledgeBaseFilter}
+        ${additionalFilters}
+        AND 1 - (embedding <=> '[${queryEmbedding.join(',')}]'::vector) >= ${threshold}
+      ORDER BY embedding <=> '[${queryEmbedding.join(',')}]'::vector
+      LIMIT ${limit * 3}
+    `;
     
-    const results = await collection.aggregate(pipeline).toArray();
+    console.log('Running vector search query...');
     
-    console.log(`Found ${results.length} results`);
+    const results = await prisma.$queryRawUnsafe<any[]>(sqlQuery);
     
-    return results.map(result => ({
+    // Filter by threshold and limit
+    const filteredResults = results
+      .filter(result => result.similarity >= threshold)
+      .slice(0, limit);
+    
+    console.log(`Found ${filteredResults.length} results`);
+    
+    return filteredResults.map(result => ({
+      id: result.id,
       documentId: result.documentId,
       knowledgeBaseId: result.knowledgeBaseId,
       chatbotId: result.chatbotId,
       chunkIndex: result.chunkIndex,
       content: result.content,
       metadata: result.metadata,
-      score: result.score,
+      score: result.similarity,
     }));
   } catch (error) {
     console.error('Error in searchSimilar:', error);
@@ -195,79 +220,35 @@ async function fallbackTextSearch({
   filters = {},
 }: Omit<SearchParams, 'threshold'>) {
   try {
-    const client = await connectMongo();
-    const db = client.db('chatbot_vectors');
-    const collection = db.collection('knowledge_vectors');
-    
-    const searchFilter: any = {
+    const whereClause: any = {
       chatbotId: chatbotId,
       ...(knowledgeBaseId && { knowledgeBaseId: knowledgeBaseId }),
-      ...filters,
+      content: {
+        contains: query,
+        mode: 'insensitive',
+      },
     };
     
-    // Simple text search as fallback
-    const results = await collection
-      .find(searchFilter)
-      .limit(limit)
-      .toArray();
+    // Simple text search as fallback (using Prisma)
+    const results = await prisma.documentVector.findMany({
+      where: whereClause,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+    });
     
     return results.map(result => ({
+      id: result.id,
       documentId: result.documentId,
       knowledgeBaseId: result.knowledgeBaseId,
       chatbotId: result.chatbotId,
       chunkIndex: result.chunkIndex,
       content: result.content,
-      metadata: result.metadata,
+      metadata: result.metadata as Record<string, any>,
       score: 0.8, // Default score for fallback
     }));
   } catch (error) {
     console.error('Error in fallbackTextSearch:', error);
     return [];
-  }
-}
-
-async function ensureVectorIndex(collection: any) {
-  try {
-    const indexes = await collection.listSearchIndexes().toArray();
-    const hasVectorIndex = indexes.some((idx: any) => idx.name === 'knowledge_vectors_index');
-    
-    if (!hasVectorIndex) {
-      console.log('Creating vector search index...');
-      
-      await collection.createSearchIndex({
-        name: 'knowledge_vectors_index',
-        type: 'vectorSearch',
-        definition: {
-          fields: [
-            {
-              type: 'vector',
-              path: 'embedding',
-              numDimensions: 768, // m2-bert-80M dimension
-              similarity: 'cosine',
-            },
-            {
-              type: 'filter',
-              path: 'chatbotId',
-            },
-            {
-              type: 'filter',
-              path: 'knowledgeBaseId',
-            },
-            {
-              type: 'filter',
-              path: 'metadata',
-            },
-          ],
-        },
-      });
-      
-      console.log('Vector search index created successfully');
-    } else {
-      console.log('Vector search index already exists');
-    }
-  } catch (error) {
-    console.error('Error creating vector index:', error);
-    throw error;
   }
 }
 
@@ -296,19 +277,17 @@ function chunkText(text: string, maxChunkSize: number = 1000): string[] {
   return chunks.length > 0 ? chunks : [];
 }
 
-// Delete all documents for a specific chatbot
+// Delete all vectors for a specific chatbot
 export async function deleteChatbotKnowledge(chatbotId: string) {
   try {
-    const client = await connectMongo();
-    const db = client.db('chatbot_vectors');
-    const collection = db.collection('knowledge_vectors');
+    const result = await prisma.documentVector.deleteMany({
+      where: { chatbotId }
+    });
     
-    const result = await collection.deleteMany({ chatbotId });
-    
-    console.log(`Deleted ${result.deletedCount} documents for chatbot ${chatbotId}`);
+    console.log(`Deleted ${result.count} vectors for chatbot ${chatbotId}`);
     
     return {
-      deletedCount: result.deletedCount,
+      deletedCount: result.count,
     };
   } catch (error) {
     console.error('Error deleting chatbot knowledge:', error);
@@ -316,19 +295,17 @@ export async function deleteChatbotKnowledge(chatbotId: string) {
   }
 }
 
-// Delete documents for a specific knowledge base
+// Delete vectors for a specific knowledge base
 export async function deleteKnowledgeBase(knowledgeBaseId: string) {
   try {
-    const client = await connectMongo();
-    const db = client.db('chatbot_vectors');
-    const collection = db.collection('knowledge_vectors');
+    const result = await prisma.documentVector.deleteMany({
+      where: { knowledgeBaseId }
+    });
     
-    const result = await collection.deleteMany({ knowledgeBaseId });
-    
-    console.log(`Deleted ${result.deletedCount} documents for knowledge base ${knowledgeBaseId}`);
+    console.log(`Deleted ${result.count} vectors for knowledge base ${knowledgeBaseId}`);
     
     return {
-      deletedCount: result.deletedCount,
+      deletedCount: result.count,
     };
   } catch (error) {
     console.error('Error deleting knowledge base:', error);
@@ -336,81 +313,66 @@ export async function deleteKnowledgeBase(knowledgeBaseId: string) {
   }
 }
 
-// Delete a specific document
+// Delete vectors for a specific document
 export async function deleteDocument(documentId: string) {
   try {
-    const client = await connectMongo();
-    const db = client.db('chatbot_vectors');
-    const collection = db.collection('knowledge_vectors');
+    const result = await prisma.documentVector.deleteMany({
+      where: { documentId }
+    });
     
-    const result = await collection.deleteMany({ documentId });
-    
-    console.log(`Deleted ${result.deletedCount} chunks for document ${documentId}`);
+    console.log(`Deleted ${result.count} vectors for document ${documentId}`);
     
     return {
-      deletedCount: result.deletedCount,
+      deletedCount: result.count,
     };
   } catch (error) {
-    console.error('Error deleting document:', error);
-    throw new Error('Failed to delete document');
+    console.error('Error deleting document vectors:', error);
+    throw new Error('Failed to delete document vectors');
   }
 }
 
 // Get statistics about stored knowledge
 export async function getKnowledgeStats(chatbotId: string) {
   try {
-    const client = await connectMongo();
-    const db = client.db('prabisha_chatbots');
-    const collection = db.collection('knowledge_bases');
-    
-    const stats = await collection.aggregate([
-      {
-        $match: { chatbotId }
-      },
-      {
-        $group: {
-          _id: '$knowledgeBaseId',
-          totalChunks: { $sum: 1 },
-          uniqueDocuments: { $addToSet: '$documentId' }
-        }
-      },
-      {
-        $project: {
-          knowledgeBaseId: '$_id',
-          totalChunks: 1,
-          uniqueDocumentsCount: { $size: '$uniqueDocuments' }
-        }
-      }
-    ]).toArray();
-    
-    const totalStats = await collection.aggregate([
-      {
-        $match: { chatbotId }
-      },
-      {
-        $group: {
-          _id: null,
-          totalChunks: { $sum: 1 },
-          uniqueDocuments: { $addToSet: '$documentId' },
-          uniqueKnowledgeBases: { $addToSet: '$knowledgeBaseId' }
-        }
-      },
-      {
-        $project: {
-          totalChunks: 1,
-          totalDocuments: { $size: '$uniqueDocuments' },
-          totalKnowledgeBases: { $size: '$uniqueKnowledgeBases' }
-        }
-      }
-    ]).toArray();
-    
+    // Use raw query to get stats
+    const statsByKB = await prisma.$queryRaw<Array<{
+      knowledgeBaseId: string;
+      totalChunks: number;
+      uniqueDocuments: number;
+    }>>`
+      SELECT 
+        "knowledgeBaseId",
+        COUNT(*) as "totalChunks",
+        COUNT(DISTINCT "documentId") as "uniqueDocuments"
+      FROM "DocumentVector"
+      WHERE "chatbotId" = ${chatbotId}
+      GROUP BY "knowledgeBaseId"
+    `;
+
+    const totalStats = await prisma.$queryRaw<Array<{
+      totalChunks: number;
+      totalDocuments: number;
+      totalKnowledgeBases: number;
+    }>>`
+      SELECT 
+        COUNT(*) as "totalChunks",
+        COUNT(DISTINCT "documentId") as "totalDocuments",
+        COUNT(DISTINCT "knowledgeBaseId") as "totalKnowledgeBases"
+      FROM "DocumentVector"
+      WHERE "chatbotId" = ${chatbotId}
+    `;
+
     return {
-      byKnowledgeBase: stats,
-      total: totalStats[0] || {
-        totalChunks: 0,
-        totalDocuments: 0,
-        totalKnowledgeBases: 0
-      }
+      byKnowledgeBase: statsByKB.map(stat => ({
+        knowledgeBaseId: stat.knowledgeBaseId,
+        totalChunks: Number(stat.totalChunks),
+        uniqueDocumentsCount: Number(stat.uniqueDocuments),
+      })),
+      total: {
+        totalChunks: Number(totalStats[0]?.totalChunks || 0),
+        totalDocuments: Number(totalStats[0]?.totalDocuments || 0),
+        totalKnowledgeBases: Number(totalStats[0]?.totalKnowledgeBases || 0),
+      },
     };
   } catch (error) {
     console.error('Error getting knowledge stats:', error);
@@ -419,45 +381,116 @@ export async function getKnowledgeStats(chatbotId: string) {
       total: {
         totalChunks: 0,
         totalDocuments: 0,
-        totalKnowledgeBases: 0
-      }
+        totalKnowledgeBases: 0,
+      },
     };
   }
 }
 
-// Test the vector search connection and index
+// Test the vector search connection
 export async function testVectorSearchConnection() {
   try {
-    const client = await connectMongo();
-    const db = client.db('chatbot_vectors');
-    const collection = db.collection('knowledge_vectors');
+    // Enable vector extension
+    await enableVectorExtension();
     
-    // Check if collection exists
-    const collections = await db.listCollections({ name: 'knowledge_vectors' }).toArray();
-    if (collections.length === 0) {
-      await db.createCollection('knowledge_vectors');
-      console.log('Created knowledge_vectors collection');
-    }
-    
-    // Ensure index exists
-    await ensureVectorIndex(collection);
+    // Create vector index for faster similarity search
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS idx_documentvector_embedding ON "DocumentVector" 
+      USING ivfflat (embedding vector_cosine_ops)
+      WITH (lists = 100)
+    `;
     
     // Try a simple query to test
-    const testDoc = await collection.findOne({});
+    const testDoc = await prisma.documentVector.findFirst();
     
     return {
       connected: true,
-      collectionExists: true,
-      indexCreated: true,
+      tableExists: true,
+      indexesCreated: true,
       hasData: !!testDoc,
-      message: 'Vector search connection successful'
+      message: 'PostgreSQL vector search connection successful',
     };
   } catch (error) {
-    console.error('Vector search connection test failed:', error);
+    console.error('PostgreSQL vector search connection test failed:', error);
     return {
       connected: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      message: 'Vector search connection test failed'
+      message: 'PostgreSQL vector search connection test failed',
     };
+  }
+}
+
+// Create indexes for better performance
+export async function createVectorIndexes() {
+  try {
+    console.log('Creating vector search indexes...');
+    
+    // Drop existing index if it exists
+    await prisma.$executeRaw`DROP INDEX IF EXISTS idx_documentvector_embedding`;
+    await prisma.$executeRaw`DROP INDEX IF EXISTS idx_documentvector_embedding_hnsw`;
+    await prisma.$executeRaw`DROP INDEX IF EXISTS idx_documentvector_embedding_ivfflat`;
+    
+    // Try to create HNSW index (requires pgvector 0.5.0+)
+    try {
+      await prisma.$executeRaw`
+        CREATE INDEX idx_documentvector_embedding_hnsw ON "DocumentVector" 
+        USING hnsw (embedding vector_cosine_ops)
+      `;
+      console.log('HNSW vector index created successfully');
+    } catch (error) {
+      console.log('HNSW not available, creating IVFFlat index...');
+      
+      // Fallback to IVFFlat
+      await prisma.$executeRaw`
+        CREATE INDEX idx_documentvector_embedding_ivfflat ON "DocumentVector" 
+        USING ivfflat (embedding vector_cosine_ops)
+        WITH (lists = 100)
+      `;
+      console.log('IVFFlat vector index created successfully');
+    }
+  } catch (error) {
+    console.error('Error creating vector indexes:', error);
+  }
+}
+
+// Batch processing for large documents
+export async function embedAndStoreBatch(
+  documents: EmbedAndStoreParams[],
+  batchSize: number = 10
+) {
+  const results = [];
+  
+  for (let i = 0; i < documents.length; i += batchSize) {
+    const batch = documents.slice(i, i + batchSize);
+    console.log(`Processing batch ${i / batchSize + 1}/${Math.ceil(documents.length / batchSize)}`);
+    
+    const batchResults = await Promise.all(
+      batch.map(doc => embedAndStore(doc))
+    );
+    
+    results.push(...batchResults);
+    
+    // Small delay to avoid rate limiting
+    if (i + batchSize < documents.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  return results;
+}
+
+// Update document vectors (delete old and create new)
+export async function updateDocumentVectors(params: EmbedAndStoreParams) {
+  try {
+    // Delete existing vectors for this document
+    await deleteDocument(params.documentId);
+    
+    // Create new vectors
+    const result = await embedAndStore(params);
+    
+    return result;
+  } catch (error) {
+    console.error('Error updating document vectors:', error);
+    throw new Error('Failed to update document vectors');
   }
 }

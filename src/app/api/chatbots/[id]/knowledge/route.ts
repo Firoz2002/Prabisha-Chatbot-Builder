@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 import { embedAndStore } from '@/lib/langchain/vector-store';
 import { processURL } from '@/lib/langchain/knowledge/web-scraper';
@@ -118,7 +118,7 @@ export async function POST(
         console.log(`Starting scraping: ${url} (crawl: ${crawlSubpages})`);
         
         // Process URL with crawling option
-        const { content, metadata, pages } = await processURL(url, crawlSubpages, 200);
+        const { content, metadata, pages } = await processURL(url, crawlSubpages, 10);
         console.log(`Finished scraping: ${url} (crawl: ${crawlSubpages})`);
 
         if (pages && pages.length > 0) {

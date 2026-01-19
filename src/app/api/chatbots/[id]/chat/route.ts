@@ -1,3 +1,4 @@
+import  { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { executeSearchChain, simpleSearch } from "@/lib/langchain/chains/search-chain";
 
@@ -179,7 +180,6 @@ export async function HEAD(
 
     // Simple check if chatbot exists
     // Note: We're importing prisma here only for this endpoint
-    const { default: prisma } = await import("@/lib/prisma");
     const chatbot = await prisma.chatbot.findUnique({
       where: { id },
       select: { id: true, name: true }

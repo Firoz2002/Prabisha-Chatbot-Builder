@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 // Helper function to get date range
 function getDateRange(timeRange: string) {
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Calculate conversion rate
-    const conversionRate = totalConversations > 0 
+    const conversionRate = totalConversations > 0
       ? ((totalLeads / totalConversations) * 100).toFixed(1)
       : '0.0';
 
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
 
     // Group by date
     const dateMap = new Map<string, { conversations: number; messages: number; leads: number }>();
-    
+
     conversations.forEach((conv) => {
       const dateKey = formatDate(conv.createdAt, timeRange);
       const existing = dateMap.get(dateKey) || { conversations: 0, messages: 0, leads: 0 };
@@ -164,13 +164,14 @@ export async function GET(request: NextRequest) {
         name: chatbot.name,
         conversations: chatbot.conversations.length,
         leads: chatbot.leads.length,
-        satisfaction: 4.5, // You can calculate this from feedback if you have it
+        satisfaction: 4.5, // Placeholder for satisfaction score
       }))
       .slice(0, 5); // Top 5 chatbots
 
-    // --- FIX START: Changed LeadForm to LeadCollection ---
-    // Get lead source distribution (Updated to use LeadCollection)
-    const leadCollections = await prisma.leadCollection.findMany({
+    // --- FIX APPLIED: Reverted to LeadForm ---
+    // In your schema, 'Lead' is connected to 'LeadForm' (via formId), not 'LeadCollection'.
+    // We must query LeadForm to get the leads distribution.
+    const leadForms = await prisma.leadForm.findMany({
       include: {
         leads: {
           where: {
@@ -181,33 +182,15 @@ export async function GET(request: NextRequest) {
     });
 
     const leadSourceMap = new Map<string, number>();
-    leadCollections.forEach((collection) => {
-      const style = collection.leadFormStyle;
-      leadSourceMap.set(style, (leadSourceMap.get(style) || 0) + collection.leads.length);
+    leadForms.forEach((form) => {
+      // Accessing leadFormStyle from LeadForm
+      const style = form.leadFormStyle;
+      leadSourceMap.set(style, (leadSourceMap.get(style) || 0) + form.leads.length);
     });
 
     const leadSourceData = Array.from(leadSourceMap.entries()).map(([name, value], index) => ({
       name: name === 'EMBEDDED' ? 'Embedded Form' : 'Message Form',
       value,
-      color: generateColor(index),
-    }));
-    // --- FIX END ---
-
-    // Get flow type distribution
-    const flows = await prisma.flow.findMany({
-      select: {
-        type: true,
-      },
-    });
-
-    const flowTypeMap = new Map<string, number>();
-    flows.forEach((flow) => {
-      flowTypeMap.set(flow.type, (flowTypeMap.get(flow.type) || 0) + 1);
-    });
-
-    const flowTypeData = Array.from(flowTypeMap.entries()).map(([name, count], index) => ({
-      name,
-      count,
       color: generateColor(index),
     }));
 
@@ -249,7 +232,7 @@ export async function GET(request: NextRequest) {
 
     const logicTypeMap = new Map<string, number>();
     logics.forEach((logic) => {
-      const typeName = logic.type.split('_').map(word => 
+      const typeName = logic.type.split('_').map(word =>
         word.charAt(0) + word.slice(1).toLowerCase()
       ).join(' ');
       logicTypeMap.set(typeName, (logicTypeMap.get(typeName) || 0) + 1);
@@ -263,8 +246,8 @@ export async function GET(request: NextRequest) {
       percentage: totalLogics > 0 ? Math.round((count / totalLogics) * 100) : 0,
     }));
 
-    // Calculate average response time (simplified - you'd need to track actual times)
-    const avgResponseTime = '1.2s'; // Placeholder
+    // Calculate average response time (simplified placeholder)
+    const avgResponseTime = '1.2s';
 
     const response = {
       stats: {
@@ -285,9 +268,6 @@ export async function GET(request: NextRequest) {
       ],
       leadSourceData: leadSourceData.length > 0 ? leadSourceData : [
         { name: 'No Data', value: 0, color: generateColor(0) }
-      ],
-      flowTypeData: flowTypeData.length > 0 ? flowTypeData : [
-        { name: 'No Flows', count: 0, color: generateColor(0) }
       ],
       hourlyActivity,
       logicTypeUsage: logicTypeUsage.length > 0 ? logicTypeUsage : [
