@@ -648,6 +648,28 @@ function ChatMessages({
             </div>
           </div>
         )}
+
+        {/* Thinking animation while generating */}
+        {loading && status === 'submitted' && (
+          <div className="flex items-center gap-3 animate-in fade-in">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <Image src={chatbot.avatar || chatbot.icon || "/character1.png"}  height={16} width={16} alt="Character" />
+            </div>
+            <div className="bg-card border rounded-2xl rounded-tl-none p-4">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  {/* Thinking animation dots */}
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <p className="text-sm">Thinking</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {loading && status === 'streaming' && (
           <div className="flex items-center gap-3 animate-in fade-in">

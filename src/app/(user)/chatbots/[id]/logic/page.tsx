@@ -166,6 +166,20 @@ interface ExistingLogic {
   }
 }
 
+const safeJsonParse = (data: any, fallback: any = []) => {
+  if (!data) return fallback;
+  if (typeof data !== 'string') return data;
+  try {
+    return JSON.parse(data);
+  } catch (e) {
+    // If it's a comma-separated string, return it as an array
+    if (typeof data === 'string' && data.includes(',')) {
+      return data.split(',').map(item => item.trim()).filter(Boolean);
+    }
+    return fallback;
+  }
+};
+
 export default function LogicPage() {
   const params = useParams();
   const router = useRouter();
@@ -281,7 +295,7 @@ export default function LogicPage() {
       description: logic.description,
       type: logic.type,
       triggerType: logic.triggerType,
-      keywords: logic.keywords ? JSON.parse(logic.keywords) : [],
+      keywords: safeJsonParse(logic.keywords),
       showAlways: logic.showAlways,
       showAtEnd: logic.showAtEnd,
       showOnButton: logic.showOnButton,
@@ -293,7 +307,7 @@ export default function LogicPage() {
       case 'COLLECT_LEADS':
         if (logic.leadCollection) {
           const fields = logic.leadCollection.fields 
-            ? JSON.parse(logic.leadCollection.fields)
+            ? safeJsonParse(logic.leadCollection.fields)
             : logic.leadCollection.formFields || []
           
           baseConfig.leadCollection = {
@@ -337,12 +351,8 @@ export default function LogicPage() {
             timezone: logic.meetingSchedule.timezone || 'UTC',
             titleFormat: logic.meetingSchedule.titleFormat,
             description: logic.meetingSchedule.description,
-            availabilityDays: logic.meetingSchedule.availabilityDays 
-              ? JSON.parse(logic.meetingSchedule.availabilityDays)
-              : undefined,
-            availabilityHours: logic.meetingSchedule.availabilityHours
-              ? JSON.parse(logic.meetingSchedule.availabilityHours)
-              : undefined,
+            availabilityDays: safeJsonParse(logic.meetingSchedule.availabilityDays),
+            availabilityHours: safeJsonParse(logic.meetingSchedule.availabilityHours),
             bufferTime: logic.meetingSchedule.bufferTime || 5,
             showTimezoneSelector: logic.meetingSchedule.showTimezoneSelector,
             requireConfirmation: logic.meetingSchedule.requireConfirmation,
@@ -396,7 +406,7 @@ export default function LogicPage() {
                         </Badge>
                         {logic.keywords && (
                           <Badge variant="outline" className="text-xs">
-                            {JSON.parse(logic.keywords).length} keywords
+                            {safeJsonParse(logic.keywords).length} keywords
                           </Badge>
                         )}
                       </div>
