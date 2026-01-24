@@ -28,6 +28,8 @@ export async function GET() {
     const iframe = document.createElement('iframe');
     iframe.id = 'chatbot-iframe-' + config.chatbotId;
     iframe.src = \`${process.env.NEXT_PUBLIC_APP_URL}/embed/widget/\${config.chatbotId}\`;
+    
+    // Initial styles
     iframe.style.cssText = \`
       border: none;
       position: fixed;
@@ -37,6 +39,8 @@ export async function GET() {
       border-radius: 12px;
       overflow: hidden;
       background: white;
+      max-width: 100vw;
+      max-height: 100vh;
     \`;
     
     // Add to document
@@ -157,6 +161,12 @@ export async function GET() {
     const position = config.position || 'bottom-right';
     const margin = '20px';
     
+    // Reset all positions first
+    iframe.style.top = '';
+    iframe.style.bottom = '';
+    iframe.style.left = '';
+    iframe.style.right = '';
+
     switch(position) {
       case 'bottom-right':
         iframe.style.bottom = margin;
@@ -177,10 +187,30 @@ export async function GET() {
     }
   }
   
+  // UPDATED: Now handles mobile full-screen logic
   function openChatbot(iframe, config) {
+    var isMobile = window.innerWidth < 480;
+
     iframe.style.display = 'block';
-    iframe.style.width = config.width || '380px';
-    iframe.style.height = config.height || '600px';
+    
+    if (isMobile) {
+      // Mobile: Full screen, no margins, square corners
+      iframe.style.width = '100%';
+      iframe.style.height = '100%';
+      iframe.style.top = '0';
+      iframe.style.left = '0';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.borderRadius = '0';
+    } else {
+      // Desktop: Standard width/height and positioning
+      iframe.style.width = config.width || '380px';
+      iframe.style.height = config.height || '600px';
+      iframe.style.borderRadius = '12px';
+      // Re-apply margins for desktop
+      applyPosition(iframe, config);
+    }
+
     iframe.style.opacity = '1';
     iframe.style.transform = 'translateY(0)';
     
@@ -202,8 +232,11 @@ export async function GET() {
   }
   
   function resizeChatbot(iframe, data) {
-    if (data.width) iframe.style.width = data.width;
-    if (data.height) iframe.style.height = data.height;
+    // Only allow resize on desktop
+    if (window.innerWidth >= 480) {
+        if (data.width) iframe.style.width = data.width;
+        if (data.height) iframe.style.height = data.height;
+    }
   }
   
   // Process initialization calls

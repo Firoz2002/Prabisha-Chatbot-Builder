@@ -378,6 +378,8 @@ function ChatBot({
               }
             }} 
             chatbot={chatbot}
+            isMobile={isMobile}
+            isEmbedded={isEmbedded}
           />
 
           {/* Lead Form Overlay */}
@@ -490,11 +492,13 @@ function ChatToggleButton({ onClick, isMobile, chatbot }: ChatToggleButtonProps)
 interface ChatHeaderProps {
   onClose: () => void;
   chatbot: any;
+  isMobile?: boolean;
+  isEmbedded?: boolean;
 }
 
-function ChatHeader({ onClose, chatbot }: ChatHeaderProps) {
+function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps) {
   return (
-    <div className={`bg-primary text-primary-foreground p-4 rounded-t-xl flex justify-between items-center overflow-visible z-10 relative`}>
+    <div className={`bg-primary text-primary-foreground p-4 ${isMobile || isEmbedded ? 'rounded-none' : 'rounded-t-xl'} flex justify-between items-center overflow-visible z-10 relative`}>
       <div className="relative flex items-center gap-3">
         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md">
           <Image 
@@ -516,9 +520,10 @@ function ChatHeader({ onClose, chatbot }: ChatHeaderProps) {
         {chatbot.workspace?.logo && (
           <Image
             src={chatbot.workspace.logo}
-            height={100}
-            width={100}
+            height={40}
+            width={80}
             alt="logo"
+            className="max-h-8 w-auto object-contain hidden sm:block"
             unoptimized
           />
         )}

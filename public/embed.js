@@ -86,18 +86,20 @@
       z-index: 999999;
       bottom: 90px;
       right: 20px;
-      width: 380px;
+      width: 280px;
+      max-width: calc(100% - 40px);
       height: 600px;
       max-height: 80vh;
       border: none;
       border-radius: 12px;
+      overflow: hidden;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       display: none;
       transition: all 0.3s ease;
       background: white;
     `;
 
-    applyPosition(iframe, true);
+    updateIframeDimensions();
     document.body.appendChild(iframe);
   }
 
@@ -192,6 +194,30 @@
     if (pos.includes('left')) el.style.left = margin;
   }
 
+  function updateIframeDimensions() {
+    if (!iframe) return;
+    if (window.innerWidth <= 480) {
+      iframe.style.width = '100%';
+      iframe.style.maxWidth = '100%';
+      iframe.style.height = '100%';
+      iframe.style.maxHeight = '100vh';
+      iframe.style.bottom = '0';
+      iframe.style.right = '0';
+      iframe.style.left = '0';
+      iframe.style.top = '0';
+      iframe.style.borderRadius = '0';
+    } else {
+      iframe.style.width = '380px';
+      iframe.style.maxWidth = 'calc(100% - 40px)';
+      iframe.style.height = '600px';
+      iframe.style.maxHeight = '80vh';
+      iframe.style.borderRadius = '12px';
+      applyPosition(iframe, true);
+    }
+  }
+
+  window.addEventListener('resize', updateIframeDimensions);
+
   function getButtonSize() {
     switch(config.buttonSize) {
       case 'small': return '50px';
@@ -209,6 +235,7 @@
   }
 
   function openChat() {
+    updateIframeDimensions();
     iframe.style.display = 'block';
     if (button) button.style.display = 'none';
   }
