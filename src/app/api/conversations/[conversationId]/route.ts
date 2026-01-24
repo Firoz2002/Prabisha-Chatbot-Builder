@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma';
 
 interface RouterParams {
-  params: Promise<{ id: string; conversationId: string }>
+  params: Promise<{ conversationId: string }>
 }
 
 export async function GET(

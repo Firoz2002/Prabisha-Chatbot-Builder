@@ -19,6 +19,7 @@ export interface Field {
 }
 
 export interface LogicConfig {
+  id: string
   name: string
   description?: string
   type: LogicType

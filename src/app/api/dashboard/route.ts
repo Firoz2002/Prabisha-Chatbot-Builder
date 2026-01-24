@@ -168,10 +168,8 @@ export async function GET(request: NextRequest) {
       }))
       .slice(0, 5); // Top 5 chatbots
 
-    // --- FIX APPLIED: Reverted to LeadForm ---
-    // In your schema, 'Lead' is connected to 'LeadForm' (via formId), not 'LeadCollection'.
-    // We must query LeadForm to get the leads distribution.
-    const leadForms = await prisma.leadForm.findMany({
+    // Fixed: Use ChatbotForm instead of leadForm
+    const chatbotForms = await prisma.chatbotForm.findMany({
       include: {
         leads: {
           where: {
@@ -182,8 +180,8 @@ export async function GET(request: NextRequest) {
     });
 
     const leadSourceMap = new Map<string, number>();
-    leadForms.forEach((form) => {
-      // Accessing leadFormStyle from LeadForm
+    chatbotForms.forEach((form) => {
+      // Accessing leadFormStyle from ChatbotForm
       const style = form.leadFormStyle;
       leadSourceMap.set(style, (leadSourceMap.get(style) || 0) + form.leads.length);
     });
@@ -220,25 +218,33 @@ export async function GET(request: NextRequest) {
       };
     }).filter((_, i) => i % 4 === 0); // Show every 4 hours
 
-    // Get logic type usage
-    const logics = await prisma.logic.findMany({
+    // Fixed: Use ChatbotLogic instead of logic
+    const chatbotLogics = await prisma.chatbotLogic.findMany({
       where: {
         createdAt: { gte: start, lte: end },
       },
       select: {
-        type: true,
+        id: true,
+        leadCollectionEnabled: true,
+        linkButtonEnabled: true,
+        meetingScheduleEnabled: true,
       },
     });
 
     const logicTypeMap = new Map<string, number>();
-    logics.forEach((logic) => {
-      const typeName = logic.type.split('_').map(word =>
-        word.charAt(0) + word.slice(1).toLowerCase()
-      ).join(' ');
-      logicTypeMap.set(typeName, (logicTypeMap.get(typeName) || 0) + 1);
+    chatbotLogics.forEach((logic) => {
+      if (logic.leadCollectionEnabled) {
+        logicTypeMap.set('Lead Collection', (logicTypeMap.get('Lead Collection') || 0) + 1);
+      }
+      if (logic.linkButtonEnabled) {
+        logicTypeMap.set('Link Button', (logicTypeMap.get('Link Button') || 0) + 1);
+      }
+      if (logic.meetingScheduleEnabled) {
+        logicTypeMap.set('Meeting Schedule', (logicTypeMap.get('Meeting Schedule') || 0) + 1);
+      }
     });
 
-    const totalLogics = logics.length;
+    const totalLogics = chatbotLogics.length;
     const logicTypeUsage = Array.from(logicTypeMap.entries()).map(([name, count]) => ({
       name,
       count,

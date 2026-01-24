@@ -18,6 +18,7 @@ import {
   Settings2,
   SquareTerminal,
   Sun,
+  NotebookPen,
 } from "lucide-react"
 import {
   Sidebar,
@@ -107,6 +108,16 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
             title: "Chatbots",
             url: "/chatbots",
           },
+          {
+            icon: MessageCircle,
+            title: "Conversations",
+            url: "/conversations",
+          },
+          {
+            icon: NotebookPen,
+            title: "Leads",
+            url: "/leads",
+          },
         ],
       },
     ],
@@ -146,24 +157,6 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
             icon: Bot,
             title: "AI Model",
             url: `/chatbots/${id}/models`,
-          },
-          {
-            icon: Settings2,
-            title: "Settings",
-            url: `/chatbots/${id}/settings`,
-          },
-        ],
-      },
-      {
-        title: "Review",
-        url: "#",
-        icon: SquareTerminal,
-        isActive: true,
-        items: [
-          {
-            icon: MessageCircle,
-            title: "Conversations",
-            url: `/chatbots/${id}/conversations`,
           },
           {
             icon: Settings2,

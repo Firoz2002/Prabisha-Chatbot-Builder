@@ -162,7 +162,6 @@ export async function searchKnowledgeBases(
             });
             
             // Extract URL and title from metadata
-            // Based on your structure: metadata has type, title, source, etc. at root level
             let sourceUrl = result.metadata?.source || result.metadata?.url;
             let sourceTitle = result.metadata?.title || result.metadata?.filename || kb.name;
             
@@ -270,20 +269,63 @@ export function formatHistory(messages: any[]): string {
 
 export async function getLogicContext(chatbot: any, message: string): Promise<string> {
   let ctx = '';
-  for (const logic of chatbot.logics || []) {
-    if (logic.triggerType === 'KEYWORD' && logic.keywords) {
-      try {
-        const keywords = JSON.parse(logic.keywords);
-        if (keywords.some((k: string) => message.toLowerCase().includes(k.toLowerCase()))) {
-          if (logic.type === 'LINK_BUTTON' && logic.linkButton) {
-            ctx += `\nAVAILABLE ACTION: You can offer the user: "${logic.linkButton.buttonText}"\n`;
-          } else if (logic.type === 'SCHEDULE_MEETING') {
-            ctx += '\nAVAILABLE ACTION: You can offer to schedule a meeting with the user.\n';
-          }
-        }
-      } catch (e) {}
-    }
+  
+  // Get chatbot logic configuration
+  const chatbotLogic = await prisma.chatbotLogic.findUnique({
+    where: { chatbotId: chatbot.id }
+  });
+  
+  if (!chatbotLogic || !chatbotLogic.triggers) {
+    return ctx;
   }
+  
+  try {
+    const triggers = JSON.parse(chatbotLogic.triggers as string);
+    if (!Array.isArray(triggers)) return ctx;
+    
+    // Check each trigger for keyword matches
+    for (const trigger of triggers) {
+      const keywords = trigger.keywords || [];
+      const feature = trigger.feature || trigger.type;
+      
+      // Check if message contains any keyword
+      const hasKeyword = keywords.some((k: string) => 
+        message.toLowerCase().includes(k.toLowerCase())
+      );
+      
+      if (hasKeyword) {
+        switch (feature) {
+          case 'linkButton':
+          case 'LINK_BUTTON':
+            // Parse link button config
+            let buttonText = 'this link';
+            if (chatbotLogic.linkButtonConfig) {
+              try {
+                const linkConfig = JSON.parse(chatbotLogic.linkButtonConfig as string);
+                buttonText = linkConfig.buttonText || 'this link';
+              } catch (e) {
+                console.error('Error parsing link button config:', e);
+              }
+            }
+            ctx += `\nAVAILABLE ACTION: You can offer the user: "${buttonText}"\n`;
+            break;
+            
+          case 'meetingSchedule':
+          case 'SCHEDULE_MEETING':
+            ctx += '\nAVAILABLE ACTION: You can offer to schedule a meeting with the user.\n';
+            break;
+            
+          case 'leadCollection':
+          case 'COLLECT_LEADS':
+            ctx += '\nAVAILABLE ACTION: You can ask the user for their contact information.\n';
+            break;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error parsing logic triggers:', e);
+  }
+  
   return ctx;
 }
 
@@ -303,15 +345,91 @@ function generateSystemPrompt(chatbot: any): string {
 export async function checkLogicTriggers(chatbot: any, message: string) {
   const triggered: any[] = [];
   
-  for (const logic of chatbot.logics || []) {
-    if (logic.triggerType === 'KEYWORD' && logic.keywords) {
-      try {
-        const keywords = JSON.parse(logic.keywords);
-        if (keywords.some((k: string) => message.toLowerCase().includes(k.toLowerCase()))) {
-          triggered.push(logic);
+  // Get chatbot logic configuration
+  const chatbotLogic = await prisma.chatbotLogic.findUnique({
+    where: { chatbotId: chatbot.id }
+  });
+  
+  if (!chatbotLogic || !chatbotLogic.triggers || !chatbotLogic.isActive) {
+    return triggered;
+  }
+  
+  try {
+    const triggers = JSON.parse(chatbotLogic.triggers as string);
+    if (!Array.isArray(triggers)) return triggered;
+    
+    // Check each trigger
+    for (const trigger of triggers) {
+      const keywords = trigger.keywords || [];
+      const hasKeyword = keywords.some((k: string) => 
+        message.toLowerCase().includes(k.toLowerCase())
+      );
+      
+      if (hasKeyword) {
+        // Construct a logic object similar to the old structure
+        const logic = {
+          id: chatbotLogic.id,
+          chatbotId: chatbotLogic.chatbotId,
+          type: trigger.feature?.toUpperCase() || trigger.type,
+          triggerType: trigger.triggerType || 'KEYWORD',
+          keywords: trigger.keywords || [],
+          name: chatbotLogic.name,
+          description: chatbotLogic.description,
+          isActive: chatbotLogic.isActive,
+          showAlways: trigger.showAlways || false,
+          showAtEnd: trigger.showAtEnd || false,
+          showOnButton: trigger.showOnButton || false,
+          // Include feature-specific configurations if available
+          config: {}
+        };
+        
+        // Add feature-specific config
+        switch (trigger.feature || trigger.type) {
+          case 'linkButton':
+          case 'LINK_BUTTON':
+            if (chatbotLogic.linkButtonConfig) {
+              try {
+                logic.config = {
+                  linkButton: JSON.parse(chatbotLogic.linkButtonConfig as string)
+                };
+              } catch (e) {
+                console.error('Error parsing link button config:', e);
+              }
+            }
+            break;
+            
+          case 'meetingSchedule':
+          case 'SCHEDULE_MEETING':
+            if (chatbotLogic.meetingScheduleConfig) {
+              try {
+                logic.config = {
+                  meetingSchedule: JSON.parse(chatbotLogic.meetingScheduleConfig as string)
+                };
+              } catch (e) {
+                console.error('Error parsing meeting schedule config:', e);
+              }
+            }
+            break;
+            
+          case 'leadCollection':
+          case 'COLLECT_LEADS':
+            if (chatbotLogic.leadCollectionConfig) {
+              try {
+                logic.config = {
+                  leadCollection: JSON.parse(chatbotLogic.leadCollectionConfig as string)
+                };
+              } catch (e) {
+                console.error('Error parsing lead collection config:', e);
+              }
+            }
+            break;
         }
-      } catch (e) {}
+        
+        triggered.push(logic);
+      }
     }
+  } catch (e) {
+    console.error('Error checking logic triggers:', e);
   }
   
   return triggered;
@@ -527,14 +645,8 @@ export async function executeSearchChain(config: SearchChainConfig): Promise<Sea
     where: { id: chatbotId },
     include: {
       knowledgeBases: { include: { documents: true }},
-      logics: {
-        where: { isActive: true },
-        include: {
-          linkButton: true,
-          meetingSchedule: true,
-          leadCollection: { include: { formFields: true }}
-        }
-      }
+      logic: true, // Changed from logics (array) to logic (single)
+      form: true
     }
   });
 

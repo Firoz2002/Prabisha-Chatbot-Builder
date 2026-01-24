@@ -141,17 +141,90 @@ model Chatbot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  form           LeadForm?
+  // Each chatbot has only one form and one logic configuration
+  form           ChatbotForm?
+  logic          ChatbotLogic?
+  
   leads          Lead[]
   conversations  Conversation[]
   knowledgeBases KnowledgeBase[]
-  logics         Logic[]
   documentVectors DocumentVector[]
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
+}
+
+model ChatbotForm {
+  id          String  @id @default(cuid())
+  title       String  @default("Get started")
+  description String?
+
+  // Form fields configuration
+  fields        Json // Array of form field objects
+  
+  // Form behavior
+  leadTiming    LeadTiming    @default(BEGINNING)
+  leadFormStyle LeadFormStyle @default(EMBEDDED)
+  cadence       Cadence       @default(ALL_AT_ONCE)
+  
+  // Form settings
+  successMessage String? @default("Thank you! We'll be in touch soon.")
+  redirectUrl    String?
+  autoClose      Boolean @default(true)
+  showThankYou   Boolean @default(true)
+  
+  // Notifications
+  notifyEmail String?
+  webhookUrl  String?
+  
+  // 1:1 relationship with Chatbot
+  chatbotId String  @unique
+  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads Lead[]
+
+  @@index([chatbotId])
+}
+
+// Consolidated Logic model - each chatbot has only one logic configuration
+model ChatbotLogic {
+  id        String    @id @default(cuid())
+  
+  // Basic info
+  name        String  @default("Chatbot Logic")
+  description String? @default("Logic configuration for this chatbot")
+  
+  // General settings
+  isActive    Boolean @default(true)
+  
+  // Lead collection configuration (moved from LeadCollection)
+  leadCollectionEnabled Boolean @default(false)
+  leadCollectionConfig  Json?   // Contains all lead collection settings
+  
+  // Link button configuration (moved from LinkButton)
+  linkButtonEnabled Boolean @default(false)
+  linkButtonConfig  Json?   // Contains all link button settings
+  
+  // Meeting schedule configuration (moved from MeetingSchedule)
+  meetingScheduleEnabled Boolean @default(false)
+  meetingScheduleConfig  Json?   // Contains all meeting schedule settings
+  
+  // Trigger configurations
+  triggers Json? // Array of trigger configurations
+  
+  // 1:1 relationship with Chatbot
+  chatbotId String @unique
+  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chatbotId])
 }
 
 enum LeadTiming {
@@ -170,7 +243,7 @@ model Lead {
   data Json
 
   formId String
-  form   LeadForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  form   ChatbotForm @relation(fields: [formId], references: [id], onDelete: Cascade)
 
   chatbotId String
   chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
@@ -184,26 +257,6 @@ model Lead {
   @@index([formId])
   @@index([chatbotId])
   @@index([conversationId])
-}
-
-model LeadForm {
-  id          String  @id @default(cuid())
-  title       String  @default("Get started")
-  description String?
-
-  fields        Json
-  leadTiming    LeadTiming    @default(BEGINNING)
-  leadFormStyle LeadFormStyle @default(EMBEDDED)
-
-  chatbotId String  @unique
-  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  leads Lead[]
-
-  @@index([chatbotId])
 }
 
 enum SenderType {
@@ -286,152 +339,6 @@ enum KBType {
   PAGE
   FAQ
   DOC
-}
-
-model Logic {
-  id        String    @id @default(cuid())
-  chatbotId String
-  type      LogicType
-
-  // Basic info
-  name        String
-  description String?
-
-  // Configuration data
-  config Json
-
-  // Activation rules
-  triggerType   TriggerType @default(KEYWORD)
-  keywords      String[]    @db.Text
-  showAlways    Boolean     @default(false)
-  showAtEnd     Boolean     @default(false)
-  showOnButton  Boolean     @default(false)
-  triggerConfig Json?
-
-  // Status
-  isActive Boolean @default(true)
-  position Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  chatbot         Chatbot          @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
-  linkButton      LinkButton?
-  meetingSchedule MeetingSchedule?
-  leadCollection  LeadCollection?
-}
-
-model LinkButton {
-  id      String @id @default(cuid())
-  logicId String @unique
-
-  buttonText   String
-  buttonIcon   String?
-  buttonLink   String
-  openInNewTab Boolean @default(true)
-
-  // Styling options
-  buttonColor String?    @default("#3b82f6")
-  textColor   String?    @default("#ffffff")
-  buttonSize  ButtonSize @default(MEDIUM)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  logic Logic @relation(fields: [logicId], references: [id], onDelete: Cascade)
-}
-
-model MeetingSchedule {
-  id      String @id @default(cuid())
-  logicId String @unique
-
-  calendarType CalendarType @default(CALENDLY)
-  calendarLink String
-  calendarId   String?
-
-  // Meeting options
-  duration    Int?    @default(30)
-  timezone    String? @default("UTC")
-  titleFormat String? @default("Meeting with {company}")
-  description String? @db.Text
-
-  // Availability settings
-  availabilityDays  String? @db.Text
-  availabilityHours String? @db.Text
-  bufferTime        Int?    @default(5)
-
-  // Display options
-  showTimezoneSelector Boolean @default(true)
-  requireConfirmation  Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  logic Logic @relation(fields: [logicId], references: [id], onDelete: Cascade)
-}
-
-model LeadCollection {
-  id      String @id @default(cuid())
-  logicId String @unique
-
-  formTitle String  @default("Get Started")
-  formDesc  String? @db.Text
-
-  leadTiming    LeadTiming    @default(BEGINNING)
-  leadFormStyle LeadFormStyle @default(EMBEDDED)
-  cadence       Cadence       @default(ALL_AT_ONCE)
-
-  fields     String  @db.Text
-  fieldOrder String? @db.Text
-
-  successMessage String? @db.Text
-  redirectUrl    String?
-  autoClose      Boolean @default(true)
-  showThankYou   Boolean @default(true)
-
-  notifyEmail String?
-  webhookUrl  String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  logic      Logic       @relation(fields: [logicId], references: [id], onDelete: Cascade)
-  formFields FormField[]
-}
-
-model FormField {
-  id               String @id @default(cuid())
-  leadCollectionId String
-
-  type            FieldType
-  label           String
-  required        Boolean   @default(true)
-  placeholder     String?
-  defaultValue    String?
-  validationRules String?   @db.Text
-
-  // For select/radio/checkbox fields
-  options String? @db.Text
-
-  order Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  leadCollection LeadCollection @relation(fields: [leadCollectionId], references: [id], onDelete: Cascade)
-
-  @@index([leadCollectionId])
-  @@index([order])
-}
-
-enum LogicType {
-  COLLECT_LEADS
-  LINK_BUTTON
-  SCHEDULE_MEETING
-  ZAPIER_INTEGRATION
-  SUGGESTIONS
-  CUSTOM_ACTION
 }
 
 enum TriggerType {

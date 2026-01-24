@@ -652,8 +652,18 @@ function ChatMessages({
         {/* Thinking animation while generating */}
         {loading && status === 'submitted' && (
           <div className="flex items-center gap-3 animate-in fade-in">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Image src={chatbot.avatar || chatbot.icon || "/character1.png"}  height={16} width={16} alt="Character" />
+            <div className={`shrink-0 flex flex-col items-center w-[50px]`}>
+              <Image 
+                src={chatbot.icon || "/icons/logo1.png"} 
+                height={50} 
+                width={50} 
+                alt={chatbot.name || "Assistant"} 
+                className='p-1 rounded-full bg-primary/10 flex items-center justify-center'
+              />
+
+              <span className="text-xs text-center break-words w-full leading-tight mt-1">
+                {chatbot.name || "Assistant"}
+              </span>
             </div>
             <div className="bg-card border rounded-2xl rounded-tl-none p-4">
               <div className="flex items-center gap-2 text-muted-foreground">

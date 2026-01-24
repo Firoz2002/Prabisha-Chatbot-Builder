@@ -52,8 +52,8 @@ export default function RootLayout({
                       }(window,document,'script','chatbot','https://chatbots.prabisha.com/embed.js'));
 
                       chatbot('init', {
-                        chatbotId: 'cmkk1lc1q0004jstxtd03ikvz',
-                        baseUrl: 'https://chatbots.prabisha.com'
+                        chatbotId: 'cmkm5p8ft00004otxgz3ov8rn',
+                        baseUrl: 'http://localhost:3000'
                       });
                     `
                   }}

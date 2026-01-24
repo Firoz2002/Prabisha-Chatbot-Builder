@@ -202,22 +202,20 @@ export async function DELETE(request: NextRequest, context: RouterParams) {
 
     // Delete all related records first to avoid foreign key constraint issues
     await prisma.$transaction([
-      // 1. Deeply nested records
-      prisma.document.deleteMany({ where: { knowledgeBase: { chatbotId: id } } }),
-      prisma.formField.deleteMany({ where: { leadCollection: { logic: { chatbotId: id } } } }),
-      prisma.linkButton.deleteMany({ where: { logic: { chatbotId: id } } }),
-      prisma.meetingSchedule.deleteMany({ where: { logic: { chatbotId: id } } }),
-      prisma.leadCollection.deleteMany({ where: { logic: { chatbotId: id } } }),
+      // 1. Start with the most deeply nested models
       prisma.message.deleteMany({ where: { conversation: { chatbotId: id } } }),
-
-      // 2. Direct related records
+      prisma.document.deleteMany({ where: { knowledgeBase: { chatbotId: id } } }),
       prisma.lead.deleteMany({ where: { chatbotId: id } }),
-      prisma.leadForm.deleteMany({ where: { chatbotId: id } }),
+      
+      // 2. Then delete models that reference the chatbot directly
       prisma.conversation.deleteMany({ where: { chatbotId: id } }),
       prisma.knowledgeBase.deleteMany({ where: { chatbotId: id } }),
-      prisma.logic.deleteMany({ where: { chatbotId: id } }),
       
-      // 3. The chatbot itself
+      // 3. Delete chatbot-specific form and logic (1:1 relationships)
+      prisma.chatbotForm.deleteMany({ where: { chatbotId: id } }),
+      prisma.chatbotLogic.deleteMany({ where: { chatbotId: id } }),
+      
+      // 4. Finally delete the chatbot itself
       prisma.chatbot.delete({ where: { id } }),
     ]);
 

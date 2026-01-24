@@ -42,25 +42,10 @@ export async function GET(
             type: true,
           }
         },
-        logics: {
-          where: {
-            isActive: true,
-          },
+        logic: { // Changed from 'logics' to 'logic' (singular, 1:1 relationship)
           include: {
-            linkButton: true,
-            meetingSchedule: true,
-            leadCollection: {
-              include: {
-                formFields: {
-                  orderBy: {
-                    order: 'asc',
-                  }
-                }
-              }
-            }
-          },
-          orderBy: {
-            position: 'asc',
+            // No longer need to include separate models as they're consolidated
+            // into JSON fields in ChatbotLogic
           }
         }
       }
@@ -82,6 +67,32 @@ export async function GET(
           : JSON.parse(chatbot.suggestions as string);
       } catch (error) {
         console.error('Error parsing suggestions:', error);
+      }
+    }
+
+    // Parse logic configurations
+    let leadCollectionConfig = null;
+    let linkButtonConfig = null;
+    let meetingScheduleConfig = null;
+    let triggers: any[] = [];
+
+    if (chatbot.logic) {
+      // Parse JSON configs
+      try {
+        if (chatbot.logic.leadCollectionConfig && typeof chatbot.logic.leadCollectionConfig === 'string') {
+          leadCollectionConfig = JSON.parse(chatbot.logic.leadCollectionConfig);
+        }
+        if (chatbot.logic.linkButtonConfig && typeof chatbot.logic.linkButtonConfig === 'string') {
+          linkButtonConfig = JSON.parse(chatbot.logic.linkButtonConfig);
+        }
+        if (chatbot.logic.meetingScheduleConfig && typeof chatbot.logic.meetingScheduleConfig === 'string') {
+          meetingScheduleConfig = JSON.parse(chatbot.logic.meetingScheduleConfig);
+        }
+        if (chatbot.logic.triggers && typeof chatbot.logic.triggers === 'string') {
+          triggers = JSON.parse(chatbot.logic.triggers);
+        }
+      } catch (error) {
+        console.error('Error parsing logic configurations:', error);
       }
     }
 
@@ -123,6 +134,13 @@ export async function GET(
         fields: chatbot.form.fields,
         leadTiming: chatbot.form.leadTiming,
         leadFormStyle: chatbot.form.leadFormStyle,
+        cadence: chatbot.form.cadence,
+        successMessage: chatbot.form.successMessage,
+        redirectUrl: chatbot.form.redirectUrl,
+        autoClose: chatbot.form.autoClose,
+        showThankYou: chatbot.form.showThankYou,
+        notifyEmail: chatbot.form.notifyEmail,
+        webhookUrl: chatbot.form.webhookUrl,
       } : null,
       
       // Knowledge bases
@@ -132,71 +150,29 @@ export async function GET(
         type: kb.type,
       })),
       
-      // Active logics
-      logics: chatbot.logics.map(logic => {
-        const baseLogic = {
-          id: logic.id,
-          type: logic.type,
-          name: logic.name,
-          description: logic.description,
-          triggerType: logic.triggerType,
-          showAlways: logic.showAlways,
-          showAtEnd: logic.showAtEnd,
-          showOnButton: logic.showOnButton,
-          position: logic.position,
-        };
-
-        // Add type-specific configurations
-        switch (logic.type) {
-          case 'LINK_BUTTON':
-            return {
-              ...baseLogic,
-              buttonText: logic.linkButton?.buttonText,
-              buttonIcon: logic.linkButton?.buttonIcon,
-              buttonLink: logic.linkButton?.buttonLink,
-              openInNewTab: logic.linkButton?.openInNewTab,
-              buttonColor: logic.linkButton?.buttonColor,
-              textColor: logic.linkButton?.textColor,
-              buttonSize: logic.linkButton?.buttonSize,
-            };
-          
-          case 'SCHEDULE_MEETING':
-            return {
-              ...baseLogic,
-              calendarType: logic.meetingSchedule?.calendarType,
-              calendarLink: logic.meetingSchedule?.calendarLink,
-              calendarId: logic.meetingSchedule?.calendarId,
-              duration: logic.meetingSchedule?.duration,
-              timezone: logic.meetingSchedule?.timezone,
-              titleFormat: logic.meetingSchedule?.titleFormat,
-              description: logic.meetingSchedule?.description,
-              showTimezoneSelector: logic.meetingSchedule?.showTimezoneSelector,
-              requireConfirmation: logic.meetingSchedule?.requireConfirmation,
-            };
-          
-          case 'COLLECT_LEADS':
-            return {
-              ...baseLogic,
-              formTitle: logic.leadCollection?.formTitle,
-              formDesc: logic.leadCollection?.formDesc,
-              leadTiming: logic.leadCollection?.leadTiming,
-              leadFormStyle: logic.leadCollection?.leadFormStyle,
-              cadence: logic.leadCollection?.cadence,
-              fields: logic.leadCollection?.fields,
-              fieldOrder: logic.leadCollection?.fieldOrder,
-              successMessage: logic.leadCollection?.successMessage,
-              redirectUrl: logic.leadCollection?.redirectUrl,
-              autoClose: logic.leadCollection?.autoClose,
-              showThankYou: logic.leadCollection?.showThankYou,
-              notifyEmail: logic.leadCollection?.notifyEmail,
-              webhookUrl: logic.leadCollection?.webhookUrl,
-              formFields: logic.leadCollection?.formFields || [],
-            };
-          
-          default:
-            return baseLogic;
-        }
-      }),
+      // Logic configuration (consolidated)
+      logic: chatbot.logic ? {
+        id: chatbot.logic.id,
+        name: chatbot.logic.name,
+        description: chatbot.logic.description,
+        isActive: chatbot.logic.isActive,
+        
+        // Feature configurations
+        leadCollectionEnabled: chatbot.logic.leadCollectionEnabled,
+        leadCollectionConfig,
+        
+        linkButtonEnabled: chatbot.logic.linkButtonEnabled,
+        linkButtonConfig,
+        
+        meetingScheduleEnabled: chatbot.logic.meetingScheduleEnabled,
+        meetingScheduleConfig,
+        
+        // Triggers
+        triggers,
+        
+        createdAt: chatbot.logic.createdAt,
+        updatedAt: chatbot.logic.updatedAt,
+      } : null,
     };
 
     return NextResponse.json(response);

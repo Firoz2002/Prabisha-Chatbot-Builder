@@ -134,7 +134,7 @@ export function useLeadGeneration({
 
   const submitLeadForm = async (formData: Record<string, string>): Promise<boolean> => {
     if (!chatbotId || !conversationId || !activeLeadForm) return false;
-    
+    console.log(chatbotId, conversationId, activeLeadForm);
     try {
       const response = await fetch(`/api/leads`, {
         method: 'POST',
