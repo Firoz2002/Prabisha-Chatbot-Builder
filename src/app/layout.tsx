@@ -52,14 +52,14 @@ export default function RootLayout({
                       }(window,document,'script','chatbot','${process.env.NEXT_PUBLIC_APP_URL}/embed.js'));
 
                       chatbot('init', {
-                        chatbotId: 'cmkky862a000004l1rbz63cn7',
+                        chatbotId: 'cmkm5p8ft00004otxgz3ov8rn',
                         baseUrl: '${process.env.NEXT_PUBLIC_APP_URL}'
                       });
                     `
                   }}
                 />
             <SessionProvider>
-              <GoogleOneTap />
+              { process.env.NODE_ENV !== "development" && <GoogleOneTap /> }
               <Toaster richColors position="top-right" closeButton />
               {children}
             </SessionProvider>

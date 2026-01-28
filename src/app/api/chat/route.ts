@@ -8,9 +8,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const message = body.message || body.input;
     const chatbotId = body.chatbotId;
-    const conversationId = body.conversationId;
-    const context = body.context;
-
+    let conversationId = body.conversationId; // Might be null/undefined
+    
     if (!message?.trim()) {
       return NextResponse.json({ error: 'Message required' }, { status: 400 });
     }
@@ -19,15 +18,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Chatbot ID required' }, { status: 400 });
     }
 
+    // Fetch chatbot to verify it exists
+    const chatbot = await prisma.chatbot.findUnique({
+      where: { id: chatbotId },
+      include: {
+        knowledgeBases: true,
+        logic: true
+      }
+    });
+
+    if (!chatbot) {
+      return NextResponse.json({ error: 'Chatbot not found' }, { status: 404 });
+    }
+
+    // If conversationId provided, verify it exists and belongs to this chatbot
+    if (conversationId) {
+      const existingConversation = await prisma.conversation.findUnique({
+        where: { id: conversationId }
+      });
+      
+      if (!existingConversation) {
+        // Conversation not found, reset to null so new one gets created
+        conversationId = null;
+      } else if (existingConversation.chatbotId !== chatbotId) {
+        return NextResponse.json(
+          { error: 'Conversation does not belong to this chatbot' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Execute search chain - it will handle conversation creation if needed
     const result = await executeSearchChain({
       chatbotId,
-      conversationId,
+      conversationId, // Might be null
       userMessage: message,
     });
 
     const responseData: any = {
       message: result.response,
       response: result.response,
+      conversationId: result.conversationId, // Always return the conversationId
     };
 
     if (result.triggeredLogics?.length) {
@@ -40,6 +71,10 @@ export async function POST(request: NextRequest) {
         meetingSchedule: logic.meetingSchedule,
         leadCollection: logic.leadCollection
       }));
+    }
+
+    if (result.sourceUrls?.length) {
+      responseData.sourceUrls = result.sourceUrls;
     }
 
     return NextResponse.json(responseData);

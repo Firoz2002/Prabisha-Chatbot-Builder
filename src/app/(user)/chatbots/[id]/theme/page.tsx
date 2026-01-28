@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
-import { Upload, Check, X } from "lucide-react"
+import { Upload, Check, X, EyeOff } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { useChatbot } from "@/providers/chatbot-provider"
@@ -29,7 +29,11 @@ export default function ThemePage() {
     { name: "orange", label: "Orange", value: "#ea580c" },
   ]
 
+  // Special option for no background color
+  const noBgColor = { name: "none", label: "No Background", value: "transparent" }
+
   const getColorValue = (colorName: string) => {
+    if (colorName === "none") return "transparent"
     const colorObj = colors.find((c) => c.name === colorName)
     return colorObj ? colorObj.value : "#3b82f6"
   }
@@ -193,6 +197,8 @@ export default function ThemePage() {
     onRemove?: () => void,
     type: 'avatar' | 'icon' = 'icon'
   ) => {
+    const hasBackground = bgColor !== "none"
+    
     return (
       <>
         <div className="flex justify-between items-center mb-3">
@@ -216,15 +222,15 @@ export default function ThemePage() {
               width: `${size}px`,
               height: `${size}px`,
               backgroundColor: getColorValue(bgColor),
-              border: border === "round" ? `2px solid ${getColorValue("black")}` : "none",
-              boxShadow: border === "rounded" ? "0 4px 12px rgba(0,0,0,0.15)" : "none",
+              border: hasBackground && border === "round" ? `2px solid ${getColorValue("black")}` : "none",
+              boxShadow: hasBackground && border === "rounded" ? "0 4px 12px rgba(0,0,0,0.15)" : "none",
             }}
           >
             {image ? (
               <img
                 src={image || "/placeholder.svg"}
                 alt={`${type} preview`}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover ${!hasBackground ? 'p-1' : ''}`}
               />
             ) : (
               <div className="flex flex-col items-center justify-center text-muted-foreground">
@@ -356,6 +362,22 @@ export default function ThemePage() {
             <div>
               <Label className="font-medium block mb-2">Background</Label>
               <div className="flex flex-wrap gap-2">
+                {/* Add the "no background" option first */}
+                <button
+                  key={`icon-bg-none`}
+                  onClick={() => updateConfig({ iconBgColor: "none" })}
+                  className={`w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
+                    config.iconBgColor === "none" ? "border-foreground ring-2 ring-offset-1" : "border-border"
+                  }`}
+                  style={{ backgroundColor: "transparent" }}
+                  title="No Background"
+                  type="button"
+                  aria-label="Remove icon background"
+                >
+                  <EyeOff className="w-4 h-4 text-muted-foreground" />
+                </button>
+                
+                {/* Regular color options */}
                 {colors.map((color) => (
                   <button
                     key={`icon-bg-${color.name}`}
@@ -393,6 +415,9 @@ export default function ThemePage() {
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Note: Border styles only apply when background is selected
+            </p>
           </div>
 
           {/* Icon Preview */}
@@ -458,6 +483,9 @@ export default function ThemePage() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Note: Border styles only apply when background is selected
+              </p>
             </div>
           </div>
 
@@ -500,6 +528,22 @@ export default function ThemePage() {
             <div>
               <Label className="font-medium block mb-2">Background</Label>
               <div className="flex flex-wrap gap-2">
+                {/* Add the "no background" option first */}
+                <button
+                  key={`avatar-bg-none`}
+                  onClick={() => updateConfig({ avatarBgColor: "none" })}
+                  className={`w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center ${
+                    config.avatarBgColor === "none" ? "border-foreground ring-2 ring-offset-1" : "border-border"
+                  }`}
+                  style={{ backgroundColor: "transparent" }}
+                  title="No Background"
+                  type="button"
+                  aria-label="Remove avatar background"
+                >
+                  <EyeOff className="w-4 h-4 text-muted-foreground" />
+                </button>
+                
+                {/* Regular color options */}
                 {colors.map((color) => (
                   <button
                     key={`avatar-bg-${color.name}`}

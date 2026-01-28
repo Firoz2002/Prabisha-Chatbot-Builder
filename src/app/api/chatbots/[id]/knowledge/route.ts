@@ -123,7 +123,7 @@ export async function POST(
         console.log(`Starting scraping: ${url} (crawl: ${crawlSubpages})`);
         
         // Process URL with crawling option
-        const { content, metadata, pages } = await processURL(url, crawlSubpages, 200);
+        const { content, metadata, pages } = await processURL(url, crawlSubpages);
         console.log(`Finished scraping: ${url} (crawl: ${crawlSubpages})`);
 
         if (pages && pages.length > 0) {

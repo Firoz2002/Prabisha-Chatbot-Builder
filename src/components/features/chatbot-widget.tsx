@@ -34,6 +34,94 @@ interface ChatbotWidgetProps {
   initialChatbotData?: any;
 }
 
+// ====================
+// Reusable Components
+// ====================
+
+const LoadingSpinner = ({ message = "Loading..." }: { message?: string }) => (
+  <div className="flex items-center justify-center h-full min-h-[400px]">
+    <div className="text-center">
+      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
+      <p className="text-muted-foreground">{message}</p>
+    </div>
+  </div>
+);
+
+const ErrorDisplay = ({ error, onRetry }: { error: string; onRetry?: () => void }) => (
+  <div className="flex items-center justify-center h-full min-h-[400px]">
+    <div className="text-center p-4">
+      <p className="text-destructive">{error}</p>
+      {onRetry && (
+        <Button 
+          onClick={onRetry} 
+          variant="outline" 
+          className="mt-2"
+        >
+          Retry
+        </Button>
+      )}
+    </div>
+  </div>
+);
+
+const ChatContainer = ({ 
+  children, 
+  isEmbedded, 
+  isMobile, 
+  isOpen 
+}: { 
+  children: React.ReactNode;
+  isEmbedded: boolean;
+  isMobile: boolean;
+  isOpen: boolean;
+}) => (
+  <div className={`${isEmbedded ? 'w-full h-full' : `fixed ${isMobile ? 'inset-0' : 'bottom-6 right-6'} z-50`} ${isMobile && !isOpen ? 'hidden' : ''}`}>
+    {children}
+  </div>
+);
+
+const LeadFormOverlay = ({
+  activeLeadForm,
+  chatbotId,
+  conversationId,
+  onClose,
+  onSuccess,
+  onSubmitLead,
+}: {
+  activeLeadForm: any;
+  chatbotId: string;
+  conversationId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+  onSubmitLead: (formData: Record<string, string>) => Promise<boolean>;
+}) => (
+  <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <LeadForm
+        config={activeLeadForm}
+        chatbotId={chatbotId}
+        conversationId={conversationId}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        onSubmitLead={onSubmitLead}
+      />
+    </div>
+  </div>
+);
+
+const ErrorBanner = ({ error }: { error: string }) => (
+  <div className="mx-4 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-lg animate-in slide-in-from-bottom">
+    <p className="text-sm text-destructive flex items-center gap-2">
+      <XIcon className="h-3 w-3" />
+      {error}
+    </p>
+  </div>
+);
+
+// ====================
+// Main Chatbot Widget
+// ====================
+
 export default function ChatbotWidget({ chatbotId, initialChatbotData }: ChatbotWidgetProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
@@ -49,7 +137,6 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     messages,
     loading,
     error,
-    isCheckingSession,
     hasLoadedInitialMessages,
     quickQuestions,
     conversationId,
@@ -83,10 +170,10 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     conversationId,
     onLeadCollected: (leadData) => {
       console.log('Lead collected:', leadData);
-      // You can trigger additional actions here
     },
   });
 
+  // Initialize chatbot
   useEffect(() => {
     if (!chatbotId) return;
     
@@ -105,24 +192,6 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     }, '*');
   }, [chatbotId]);
 
-  // Handle closing from inside
-  const handleClose = () => {
-    window.parent.postMessage({ 
-      type: 'chatbot-close',
-      chatbotId: chatbotId 
-    }, '*');
-  };
-
-  // Handle resize
-  const handleResize = (width: string, height: string) => {
-    window.parent.postMessage({ 
-      type: 'chatbot-resize',
-      chatbotId: chatbotId,
-      width,
-      height
-    }, '*');
-  };
-
   // Check lead requirements when messages change
   useEffect(() => {
     if (messages.length > 0 && !hasSubmittedLead && conversationId) {
@@ -139,32 +208,13 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     }
   }, [shouldShowLeadForm, activeLeadForm, isLeadFormVisible, loading, showLeadForm]);
 
+  // Loading states
   if (!isInitialized || isLoadingChatbot) {
-    return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading chatbot...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading chatbot..." />;
   }
 
   if (chatbotError) {
-    return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
-        <div className="text-center p-4">
-          <p className="text-destructive">Failed to load chatbot</p>
-          <Button 
-            onClick={() => window.location.reload()} 
-            variant="outline" 
-            className="mt-2"
-          >
-            Retry
-          </Button>
-        </div>
-      </div>
-    );
+    return <ErrorDisplay error="Failed to load chatbot" onRetry={() => window.location.reload()} />;
   }
 
   if (!chatbot) {
@@ -174,14 +224,19 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
   return (
     <ChatBot 
       chatbot={chatbot} 
-      onClose={handleClose}
+      onClose={() => {
+        window.parent.postMessage({ 
+          type: 'chatbot-close',
+          chatbotId: chatbotId 
+        }, '*');
+      }}
+      // Chat state
       text={text}
       setText={setText}
       status={status}
       messages={messages}
       loading={loading}
       error={error}
-      isCheckingSession={isCheckingSession}
       hasLoadedInitialMessages={hasLoadedInitialMessages}
       quickQuestions={quickQuestions}
       conversationId={conversationId}
@@ -192,7 +247,7 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
       messagesEndRef={messagesEndRef}
       inputRef={inputRef}
       chatContainerRef={chatContainerRef}
-      // Lead generation props
+      // Lead generation state
       activeLeadForm={activeLeadForm}
       isLeadFormVisible={isLeadFormVisible}
       shouldShowLeadForm={shouldShowLeadForm}
@@ -207,29 +262,32 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
   );
 }
 
+// ====================
+// ChatBot Component
+// ====================
+
 interface ChatBotProps {
   chatbot: any;
   onClose: () => void;
-  // Chat state props
+  // Chat state
   text: string;
   setText: (text: string) => void;
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   messages: ChatMessage[];
   loading: boolean;
   error: string;
-  isCheckingSession: boolean;
   hasLoadedInitialMessages: boolean;
   quickQuestions: string[];
   conversationId: string | null;
   handleSubmit: (e: React.FormEvent) => Promise<void>;
   handleQuickQuestion: (question: string) => Promise<void>;
-  handleNewChat: () => Promise<void>;
+  handleNewChat: () => void;
   formatTime: (date?: Date) => string;
   // Refs
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   chatContainerRef: React.RefObject<HTMLDivElement | null>;
-  // Lead generation props
+  // Lead generation
   activeLeadForm: any;
   isLeadFormVisible: boolean;
   shouldShowLeadForm: boolean;
@@ -252,7 +310,6 @@ function ChatBot({
   messages,
   loading,
   error,
-  isCheckingSession,
   hasLoadedInitialMessages,
   quickQuestions,
   conversationId,
@@ -329,54 +386,32 @@ function ChatBot({
   }, [isMicrophoneOn, startListening, stopListening, resetTranscript]);
 
   const handleToggleMicrophone = () => {
-    if (!browserSupportsSpeechRecognition) {
-      return;
-    }
+    if (!browserSupportsSpeechRecognition) return;
     setIsMicrophoneOn(!isMicrophoneOn);
   };
 
   const handleLeadFormSuccess = () => {
     markLeadAsSubmitted();
-    // You can add a success message to the chat
-    // For example: addMessageToChat({ role: 'bot', content: 'Thank you for your information!' });
   };
 
-  if (isCheckingSession || !hasLoadedInitialMessages) {
+  if (!hasLoadedInitialMessages) {
     return (
-      <div className={`${isEmbedded ? 'w-full h-full' : `fixed ${isMobile ? 'inset-0' : 'bottom-6 right-6'} z-50`}`}>
-        <div className={`
-          ${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-[600px] rounded-xl bottom-6 right-6'}
-          bg-background flex flex-col border shadow-2xl overflow-hidden
-        `}>
+      <ChatContainer isEmbedded={isEmbedded} isMobile={isMobile} isOpen={true}>
+        <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-[600px] rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl overflow-hidden`}>
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-              <p className="text-muted-foreground">Loading chat...</p>
-            </div>
+            <LoadingSpinner message="Loading chat..." />
           </div>
         </div>
-      </div>
+      </ChatContainer>
     );
   }
 
   return (
-    <div className={`
-      ${isEmbedded ? 'w-full h-full' : `fixed ${isMobile ? 'inset-0' : 'bottom-6 right-6'} z-50`} 
-      ${isMobile && !isOpen ? 'hidden' : ''}
-    `}>
+    <ChatContainer isEmbedded={isEmbedded} isMobile={isMobile} isOpen={isOpen}>
       {isOpen ? (
-        <div className={`
-          ${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-[600px] rounded-xl bottom-6 right-6'}
-          bg-background flex flex-col border shadow-2xl animate-in slide-in-from-bottom-full duration-300 overflow-hidden
-        `}>
+        <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-[600px] rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl animate-in slide-in-from-bottom-full duration-300 overflow-hidden`}>
           <ChatHeader 
-            onClose={() => {
-              if (isEmbedded) {
-                onClose();
-              } else {
-                setIsOpen(false);
-              }
-            }} 
+            onClose={() => isEmbedded ? onClose() : setIsOpen(false)} 
             chatbot={chatbot}
             isMobile={isMobile}
             isEmbedded={isEmbedded}
@@ -384,18 +419,14 @@ function ChatBot({
 
           {/* Lead Form Overlay */}
           {isLeadFormVisible && activeLeadForm && (
-            <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="w-full max-w-md max-h-[90vh] overflow-y-auto">
-                <LeadForm
-                  config={activeLeadForm}
-                  chatbotId={chatbot.id}
-                  conversationId={conversationId || ''}
-                  onClose={hideLeadForm}
-                  onSuccess={handleLeadFormSuccess}
-                  onSubmitLead={submitLeadForm}
-                />
-              </div>
-            </div>
+            <LeadFormOverlay 
+              activeLeadForm={activeLeadForm}
+              chatbotId={chatbot.id}
+              conversationId={conversationId || ''}
+              onClose={hideLeadForm}
+              onSuccess={handleLeadFormSuccess}
+              onSubmitLead={submitLeadForm}
+            />
           )}
 
           <ChatMessages
@@ -409,33 +440,23 @@ function ChatBot({
             messagesEndRef={messagesEndRef}
             formatTime={formatTime}
             chatbot={chatbot}
-            // Add new prop for lead form button
             showLeadForm={!hasSubmittedLead && activeLeadForm ? showLeadForm : undefined}
             hasSubmittedLead={hasSubmittedLead}
           />
             
-            {error && (
-              <div className="mx-4 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-lg animate-in slide-in-from-bottom">
-                <p className="text-sm text-destructive flex items-center gap-2">
-                  <XIcon className="h-3 w-3" />
-                  {error}
-                </p>
-              </div>
-            )}
+            {error && <ErrorBanner error={error} />}
 
             <ChatInput
               text={text}
               setText={setText}
               loading={loading}
               isMicrophoneOn={isMicrophoneOn}
-              setIsMicrophoneOn={setIsMicrophoneOn}
               browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
               onSubmit={handleSubmit}
               onNewChat={handleNewChat}
               status={status}
               inputRef={inputRef}
               onToggleMicrophone={handleToggleMicrophone}
-              // Add new prop for lead button
               hasLeadForm={!hasSubmittedLead && !!activeLeadForm}
               onShowLeadForm={showLeadForm}
               isLoadingLeadConfig={isLoadingLeadConfig}
@@ -450,9 +471,13 @@ function ChatBot({
           />
         )
       )}
-    </div>
+    </ChatContainer>
   );
 }
+
+// ====================
+// Sub-Components
+// ====================
 
 interface ChatToggleButtonProps {
   onClick: () => void;
@@ -461,16 +486,12 @@ interface ChatToggleButtonProps {
 }
 
 function ChatToggleButton({ onClick, isMobile, chatbot }: ChatToggleButtonProps) {
+  if (isMobile) return null;
+  
   return (
     <button
       onClick={onClick}
-      className={`
-        fixed bottom-6 right-6 text-primary-foreground
-        border border-primary
-        rounded-full shadow-lg hover:shadow-xl transition-all duration-300
-        hover:scale-110 active:scale-95 group animate-bounce-slow
-        ${isMobile ? 'hidden' : ''}
-      `}
+      className="fixed bottom-6 right-6 text-primary-foreground border border-primary rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 group animate-bounce-slow"
       aria-label="Open chatbot"
     >
       <div className="relative">
@@ -517,17 +538,6 @@ function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps)
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {chatbot.workspace?.logo && (
-          <Image
-            src={chatbot.workspace.logo}
-            height={40}
-            width={80}
-            alt="logo"
-            className="max-h-8 w-auto object-contain hidden sm:block"
-            unoptimized
-          />
-        )}
-
         <button 
           onClick={onClose}
           className="p-2 rounded-full hover:bg-white/10 transition-colors"
@@ -575,57 +585,152 @@ function ChatMessages({
   const hasUserMessages = messages.filter(m => m.role === 'user').length > 0;
   const hasMultipleMessages = messages.length >= 2;
 
+  // Reusable Chatbot Avatar Component
+  const ChatbotAvatar = ({ 
+    size = "default", 
+    showName = true,
+    className = "" 
+  }: {
+    size?: "small" | "default";
+    showName?: boolean;
+    className?: string;
+  }) => (
+    <div className={`shrink-0 flex flex-col items-center ${size === "default" ? "w-[50px]" : ""} ${className}`}>
+      <Image 
+        src={chatbot.icon || "/icons/logo1.png"} 
+        height={size === "default" ? 50 : 32}
+        width={size === "default" ? 50 : 32}
+        alt={chatbot.name || "Assistant"} 
+        className={`${size === "default" ? 'p-1' : 'p-0.5'} rounded-full bg-primary/10 flex items-center justify-center`}
+      />
+      {showName && size === "default" && (
+        <span className="text-xs text-center break-words w-full leading-tight mt-1">
+          {chatbot.name || "Assistant"}
+        </span>
+      )}
+    </div>
+  );
+
+  // Reusable Small Chatbot Avatar (for streaming/thinking states)
+  const SmallChatbotAvatar = () => (
+    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+      <Image 
+        src={chatbot.avatar || chatbot.icon || "/character1.png"} 
+        height={16} 
+        width={16} 
+        alt={chatbot.name || "Assistant"} 
+        className="rounded-full"
+      />
+    </div>
+  );
+
+  // Reusable Message Bubble Component
+  const MessageBubble = ({ 
+    message, 
+    isUser,
+    showAvatar = true,
+    avatarSize = "default" 
+  }: {
+    message: ChatMessage;
+    isUser: boolean;
+    showAvatar?: boolean;
+    avatarSize?: "small" | "default";
+  }) => (
+    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
+      {!isUser && showAvatar && (
+        <ChatbotAvatar size={avatarSize} className={avatarSize === "small" ? "w-8" : ""} />
+      )}
+      
+      <div className={isUser ? 'ml-auto' : ''}>
+        <div 
+          className={`
+            rounded-2xl p-4 shadow-sm animate-in fade-in duration-200
+            ${isUser 
+              ? 'bg-primary text-primary-foreground rounded-tr-none' 
+              : 'bg-card border rounded-tl-none'}
+          `}
+        >
+          <div 
+            className={`
+              prose prose-sm max-w-none
+              ${isUser ? 'text-primary-foreground' : 'text-foreground'}
+            `}
+            dangerouslySetInnerHTML={{ 
+              __html: sanitizedHTML(message.content).replace(/<a /g, `<a target="_blank" rel="noopener noreferrer" `)
+            }}
+          />
+          {message.timestamp && (
+            <div className={`text-xs mt-2 ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+              {formatTime(message.timestamp)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Reusable Loading State Component
+  const LoadingState = ({ 
+    statusType,
+    text = "Thinking",
+    showSmallAvatar = false,
+    customContent 
+  }: {
+    statusType: 'submitted' | 'streaming';
+    text?: string;
+    showSmallAvatar?: boolean;
+    customContent?: React.ReactNode;
+  }) => {
+    const loadingContent = customContent || (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        {statusType === 'submitted' && (
+          <>
+            <div className="flex space-x-1">
+              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+            </div>
+            <p className="text-sm">{text}</p>
+          </>
+        )}
+        
+        {statusType === 'streaming' && (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <p className="text-sm">{text}</p>
+            <div className="flex gap-1">
+              <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
+              <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
+              <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
+            </div>
+          </>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="flex items-center gap-3 animate-in fade-in">
+        {showSmallAvatar ? <SmallChatbotAvatar /> : <ChatbotAvatar />}
+        <div className="bg-card border rounded-2xl rounded-tl-none p-4">
+          {loadingContent}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div 
       ref={chatContainerRef}
       className="flex-1 overflow-y-auto bg-linear-to-b from-background to-muted/30 relative"
     >
       <div className="p-4 space-y-6">
-        {messages.map((msg, index) => (
-          <div 
-            key={index} 
-            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-          >
-            <div className={`shrink-0 flex flex-col items-center w-[50px] ${msg.role === 'user' ? 'hidden' : ''}`}>
-              <Image 
-                src={chatbot.icon || "/icons/logo1.png"} 
-                height={50} 
-                width={50} 
-                alt={chatbot.name || "Assistant"} 
-                className='p-1 rounded-full bg-primary/10 flex items-center justify-center'
-              />
-
-              <span className="text-xs text-center break-words w-full leading-tight mt-1">
-                {chatbot.name || "Assistant"}
-              </span>
-            </div>
-            
-            <div className={`${msg.role === 'user' ? 'ml-auto' : ''}`}>
-              <div 
-                className={`
-                  rounded-2xl p-4 shadow-sm animate-in fade-in duration-200
-                  ${msg.role === 'user' 
-                    ? 'bg-primary text-primary-foreground rounded-tr-none' 
-                    : 'bg-card border rounded-tl-none'}
-                `}
-              >
-                <div 
-                  className={`
-                    prose prose-sm max-w-none
-                    ${msg.role === 'user' ? 'text-primary-foreground' : 'text-foreground'}
-                  `}
-                  dangerouslySetInnerHTML={{ 
-                    __html: sanitizedHTML(msg.content).replace(/<a /g, `<a target="_blank" rel="noopener noreferrer" `)
-                  }}
-                />
-                {msg.timestamp && (
-                  <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                    {formatTime(msg.timestamp)}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+        {/* Render Messages */}
+        {messages.map((message, index) => (
+          <MessageBubble
+            key={index}
+            message={message}
+            isUser={message.role === 'user'}
+          />
         ))}
         
         {/* Lead Collection Call-to-Action */}
@@ -656,60 +761,22 @@ function ChatMessages({
 
         {/* Thinking animation while generating */}
         {loading && status === 'submitted' && (
-          <div className="flex items-center gap-3 animate-in fade-in">
-            <div className={`shrink-0 flex flex-col items-center w-[50px]`}>
-              <Image 
-                src={chatbot.icon || "/icons/logo1.png"} 
-                height={50} 
-                width={50} 
-                alt={chatbot.name || "Assistant"} 
-                className='p-1 rounded-full bg-primary/10 flex items-center justify-center'
-              />
-
-              <span className="text-xs text-center break-words w-full leading-tight mt-1">
-                {chatbot.name || "Assistant"}
-              </span>
-            </div>
-            <div className="bg-card border rounded-2xl rounded-tl-none p-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  {/* Thinking animation dots */}
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
-                  </div>
-                  <p className="text-sm">Thinking</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <LoadingState 
+            statusType="submitted" 
+            text="Thinking"
+          />
         )}
         
+        {/* Streaming/searching animation */}
         {loading && status === 'streaming' && (
-          <div className="flex items-center gap-3 animate-in fade-in">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Image 
-                src={chatbot.avatar || chatbot.icon || "/character1.png"} 
-                height={16} 
-                width={16} 
-                alt={chatbot.name || "Assistant"} 
-              />
-            </div>
-            <div className="bg-card border rounded-2xl rounded-tl-none p-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <p className="text-sm">Searching...</p>
-                <div className="flex gap-1">
-                  <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
-                  <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
-                  <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
-                </div>
-              </div>
-            </div>
-          </div>
+          <LoadingState 
+            statusType="streaming" 
+            text="Searching..."
+            showSmallAvatar={true}
+          />
         )}
         
+        {/* Quick Questions */}
         {!hasUserMessages && quickQuestions.length > 0 && (
           <div className="mt-8 animate-in fade-in delay-300">
             <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
@@ -750,7 +817,6 @@ interface ChatInputProps {
   setText: (text: string) => void;
   loading: boolean;
   isMicrophoneOn: boolean;
-  setIsMicrophoneOn: (value: boolean) => void;
   browserSupportsSpeechRecognition: boolean;
   onSubmit: (e: React.FormEvent) => Promise<void>;
   onNewChat: () => void;
@@ -767,7 +833,6 @@ function ChatInput({
   setText,
   loading,
   isMicrophoneOn,
-  setIsMicrophoneOn,
   browserSupportsSpeechRecognition,
   onSubmit,
   onNewChat,

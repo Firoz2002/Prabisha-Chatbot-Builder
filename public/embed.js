@@ -124,7 +124,8 @@
       img.style.cssText = `
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        padding: 4px;
+        object-fit: contain;
       `;
       
       const shape = (config.iconShape || '').toUpperCase();
