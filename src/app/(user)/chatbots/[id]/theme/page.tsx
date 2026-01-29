@@ -122,7 +122,7 @@ export default function ThemePage() {
       
       // Add text fields
       formData.append("theme", config.theme)
-      formData.append("popup_onload", config.popupOnload.toString())
+      formData.append("popup_onload", config.popup_onload.toString())
       formData.append("avatarSize", config.avatarSize.toString())
       formData.append("avatarColor", config.avatarColor)
       formData.append("avatarBorder", config.avatarBorder)
@@ -578,8 +578,8 @@ export default function ThemePage() {
       <SettingsSection title="Behavior">
         <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg hover:bg-muted/50 transition">
           <Checkbox
-            checked={config.popupOnload}
-            onCheckedChange={(checked) => updateConfig({ popupOnload: checked as boolean })}
+            checked={config.popup_onload}
+            onCheckedChange={(checked) => updateConfig({ popup_onload: checked as boolean })}
             className="mt-1"
           />
           <span className="text-sm leading-relaxed">
