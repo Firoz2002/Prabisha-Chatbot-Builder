@@ -8,17 +8,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Check, Info, Loader2, Sparkles } from "lucide-react"
 import { useChatbot } from "@/providers/chatbot-provider"
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import { Message } from "@/types/chat"
 
 export default function InstructionsPage() {
   const { config, updateConfig, refreshConfig } = useChatbot();
   
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: config.greeting }
+    { senderType: "BOT", content: config.greeting }
   ])
 
   // Initialize local state from context
@@ -31,7 +28,7 @@ export default function InstructionsPage() {
     setName(config.name || "");
     setGreeting(config.greeting || "How can I help you today?");
     setDirective(config.directive || "");
-    setMessages([{ role: "assistant", content: config.greeting || "How can I help you today?" }]);
+    setMessages([{ senderType: "BOT", content: config.greeting || "How can I help you today?" }]);
   }, [config]);
 
   const handleSave = async () => {
@@ -67,8 +64,8 @@ export default function InstructionsPage() {
       toast.success("Changes saved successfully!");
       
       // Update chat messages with new greeting
-      if (messages.length === 1 && messages[0].role === "assistant") {
-        setMessages([{ role: "assistant", content: greeting }]);
+      if (messages.length === 1 && messages[0].senderType === "BOT") {
+        setMessages([{ senderType: "BOT", content: greeting }]);
       }
     } catch (error) {
       console.error("Error saving changes:", error);
@@ -82,7 +79,7 @@ export default function InstructionsPage() {
   // If config is still loading, show loading state
   if (!config.id) {
     return (
-      <div className="flex min-h-[400px] w-full items-center justify-center">
+      <div className="flex min-h-100 w-full items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -161,7 +158,7 @@ export default function InstructionsPage() {
               setDirective(e.target.value);
               updateConfig({ directive: e.target.value });
             }}
-            className="min-h-[280px] font-mono text-sm resize-none"
+            className="min-h-70 font-mono text-sm resize-none"
             placeholder={`Example: You are a helpful customer support assistant for an e-commerce store. 
 - Always be polite and professional
 - Keep responses concise

@@ -175,23 +175,23 @@ export default function Home() {
                 </li>
               </ul>
             </Card>
-            <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/30 p-8">
+            <Card className="bg-linear-to-br from-primary/10 to-secondary/10 border-primary/30 p-8">
               <h3 className="font-semibold text-lg mb-6 text-primary">ChatFlow</h3>
               <ul className="space-y-3">
                 <li className="flex gap-3 text-sm">
-                  <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
                   <span>Minutes to deploy</span>
                 </li>
                 <li className="flex gap-3 text-sm">
-                  <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
                   <span>Pay per conversation</span>
                 </li>
                 <li className="flex gap-3 text-sm">
-                  <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
                   <span>No coding required</span>
                 </li>
                 <li className="flex gap-3 text-sm">
-                  <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
                   <span>1-click integrations</span>
                 </li>
               </ul>

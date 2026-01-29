@@ -18,6 +18,9 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" })
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  
+  // Get the callbackUrl from query parameters
+  const callbackUrl = searchParams.get("callbackUrl") || "/chatbots"
 
   useEffect(() => {
     const error = searchParams.get("error")
@@ -31,7 +34,10 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     try {
       setIsLoading(true)
-      await signIn("google", { callbackUrl: "/chatbots", redirect: false })
+      // Use callbackUrl for Google sign-in
+      await signIn("google", { 
+        callbackUrl: callbackUrl, 
+      })
     } catch (error) {
       console.error("Google login error:", error)
       toast.error("Failed to sign in with Google. Please try again.")
@@ -64,13 +70,18 @@ export default function LoginPage() {
         email: formData.email,
         password: formData.password,
         redirect: false,
-        callbackUrl: "/chatbots",
+        // Use the callbackUrl from query params
+        callbackUrl: callbackUrl,
       })
 
-      if (result?.error) throw new Error(result.error)
+      if (result?.error) {
+        throw new Error(result.error)
+      }
+      
       if (result?.ok) {
         toast.success("Login successful!")
-        router.push("/accounts")
+        // Redirect to the callbackUrl or default
+        router.push(callbackUrl)
       }
     } catch (error) {
       console.error("Login error:", error)

@@ -27,7 +27,6 @@ import { Card } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -37,7 +36,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -45,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Message } from '@/types/chat';
 
 interface Conversation {
   id: string;
@@ -73,14 +72,6 @@ interface Conversation {
   createdAt: string;
   updatedAt: string;
   endedAt: string | null;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  senderType: 'USER' | 'BOT';
-  createdAt: string;
-  conversationId: string;
 }
 
 interface Pagination {
@@ -539,7 +530,7 @@ export default function ConversationsPage() {
                               />
                             </div>
                             <span className="text-[10px] text-muted-foreground px-1">
-                              {format(new Date(msg.createdAt), 'p')}
+                              {format((msg.createdAt), 'p')}
                             </span>
                           </div>
                         </motion.div>

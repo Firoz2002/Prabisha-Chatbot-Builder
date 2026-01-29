@@ -5,41 +5,23 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Copy,
   Check,
   Code,
-  Link as LinkIcon,
-  Settings,
   Eye,
   Globe,
   Download,
   Zap,
-  Shield,
-  AlertCircle,
-  MessageSquare
 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type TechStack = 'vanilla' | 'react' | 'nextjs' | 'vue' | 'angular' | 'wordpress' | 'shopify';
 
@@ -445,7 +427,7 @@ add_action('wp_footer', 'add_chatbot_script');
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="relative border rounded-lg p-6 bg-gradient-to-br from-background to-muted min-h-[300px] md:min-h-[400px] flex items-center justify-center">
+            <div className="relative border rounded-lg p-6 bg-linear-to-br from-background to-muted min-h-75 md:min-h-100 flex items-center justify-center">
               {customizations.showButton && (
                 <div
                   className={`absolute ${
@@ -565,7 +547,7 @@ add_action('wp_footer', 'add_chatbot_script');
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <div className="relative">
-                <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-xs max-h-[400px]">
+                <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-xs max-h-100">
                   <code>{embedCode}</code>
                 </pre>
                 <Button

@@ -150,7 +150,7 @@ const KnowledgeBaseItem = ({
                 <TableBody>
                   {kb.documents.map((doc) => (
                     <TableRow key={doc.id} className="hover:bg-muted/50 border-border/50">
-                      <TableCell className="pl-6 font-medium max-w-[300px] truncate py-3">
+                      <TableCell className="pl-6 font-medium max-w-75 truncate py-3">
                         <div className="flex items-center gap-2 text-sm">
                           {doc.metadata?.url ? (
                             <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -402,7 +402,7 @@ export default function KnowledgePage() {
 
       {/* ADD SOURCE DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-150 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Knowledge Source</DialogTitle>
           </DialogHeader>
@@ -505,7 +505,7 @@ export default function KnowledgePage() {
                 {uploadedFiles.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">Ready to Upload</Label>
-                    <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-37.5 overflow-y-auto pr-1">
                       {uploadedFiles.map((file, index) => (
                         <div key={index} className="flex items-center justify-between p-2 border rounded-md bg-muted/10 text-sm">
                           <div className="flex items-center gap-2 overflow-hidden">
@@ -542,7 +542,7 @@ export default function KnowledgePage() {
                 {uploadedTables.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">Ready to Upload</Label>
-                    <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-37.5 overflow-y-auto pr-1">
                       {uploadedTables.map((file, index) => (
                         <div key={index} className="flex items-center justify-between p-2 border rounded-md bg-muted/10 text-sm">
                           <div className="flex items-center gap-2 overflow-hidden">
@@ -569,7 +569,7 @@ export default function KnowledgePage() {
                     <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                             {item.status === 'success' ? <CheckCircle2 className="w-3 h-3 text-green-500"/> : <Loader2 className="w-3 h-3 animate-spin"/>}
-                            <span className="truncate max-w-[200px]">{item.fileName}</span>
+                            <span className="truncate max-w-50">{item.fileName}</span>
                         </div>
                         <span>{item.progress}%</span>
                     </div>

@@ -1,8 +1,10 @@
+// app/api/workspaces/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as z from "zod";
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,26 +16,55 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let workspaces = await prisma.workspace.findMany({
+    // Get user's workspaces with owner info
+    const workspaceMemberships = await prisma.workspaceMember.findMany({
       where: {
-        members: {
-          some: {
-            userId: session.user.id,
-          },
-        },
+        userId: session.user.id,
       },
-      select: {
-        id: true,
-        name: true,
-        createdAt: true,
+      include: {
+        workspace: {
+          include: {
+            members: {
+              where: {
+                role: 'OWNER'
+              },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    image: true
+                  }
+                }
+              },
+              take: 1
+            }
+          }
+        }
+      },
+      orderBy: {
+        workspace: {
+          createdAt: 'asc'
+        }
       }
     });
+
+    // Transform the data to include owner info
+    let workspaces = workspaceMemberships.map(membership => ({
+      id: membership.workspace.id,
+      name: membership.workspace.name,
+      createdAt: membership.workspace.createdAt,
+      owner: membership.workspace.members[0]?.user || null,
+      // Add other fields you might need
+      role: membership.role,
+    }));
 
     // If user has no workspaces, create a default one
     if (workspaces.length === 0) {
       const newWorkspace = await prisma.workspace.create({
         data: {
-          name: "Default Workspace",
+          name: `${session.user.name || "My"}'s Workspace`, // Personalized default name
         },
       });
 
@@ -45,11 +76,19 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      // Return the newly created workspace
+      // Return the newly created workspace with owner info
       return NextResponse.json([{
         id: newWorkspace.id,
         name: newWorkspace.name,
         createdAt: newWorkspace.createdAt,
+        owner: {
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          image: session.user.image
+        },
+        role: 'OWNER',
+        displayName: null,
       }]);
     }
 

@@ -354,7 +354,7 @@ export default function AllLeadsPage() {
   );
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
+    <div className="container mx-auto p-6 space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">Lead Management</h1>

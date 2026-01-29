@@ -14,7 +14,7 @@ import {
   UserPlus,
   CheckCircle2
 } from 'lucide-react';
-import { ChatMessage } from '@/types/chat';
+import { Message } from '@/types/chat';
 import {
   PromptInput,
   PromptInputTextarea,
@@ -273,7 +273,7 @@ interface ChatBotProps {
   text: string;
   setText: (text: string) => void;
   status: 'submitted' | 'streaming' | 'ready' | 'error';
-  messages: ChatMessage[];
+  messages: Message[];
   loading: boolean;
   error: string;
   hasLoadedInitialMessages: boolean;
@@ -397,7 +397,7 @@ function ChatBot({
   if (!hasLoadedInitialMessages) {
     return (
       <ChatContainer isEmbedded={isEmbedded} isMobile={isMobile} isOpen={true}>
-        <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-[600px] rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl overflow-hidden`}>
+        <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-150 rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl overflow-hidden`}>
           <div className="flex-1 flex items-center justify-center">
             <LoadingSpinner message="Loading chat..." />
           </div>
@@ -409,7 +409,7 @@ function ChatBot({
   return (
     <ChatContainer isEmbedded={isEmbedded} isMobile={isMobile} isOpen={isOpen}>
       {isOpen ? (
-        <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-[600px] rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl animate-in slide-in-from-bottom-full duration-300 overflow-hidden`}>
+        <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-150 rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl animate-in slide-in-from-bottom-full duration-300 overflow-hidden`}>
           <ChatHeader 
             onClose={() => isEmbedded ? onClose() : setIsOpen(false)} 
             chatbot={chatbot}
@@ -551,7 +551,7 @@ function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps)
 }
 
 interface ChatMessagesProps {
-  messages: ChatMessage[];
+  messages: Message[];
   loading: boolean;
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   error: string;
@@ -582,7 +582,7 @@ function ChatMessages({
   hasSubmittedLead,
 }: ChatMessagesProps) {
   
-  const hasUserMessages = messages.filter(m => m.role === 'user').length > 0;
+  const hasUserMessages = messages.filter(m => m.senderType === 'USER').length > 0;
   const hasMultipleMessages = messages.length >= 2;
 
   // Reusable Chatbot Avatar Component
@@ -595,7 +595,7 @@ function ChatMessages({
     showName?: boolean;
     className?: string;
   }) => (
-    <div className={`shrink-0 flex flex-col items-center ${size === "default" ? "w-[50px]" : ""} ${className}`}>
+    <div className={`shrink-0 flex flex-col items-center ${size === "default" ? "w-12.5" : ""} ${className}`}>
       <Image 
         src={chatbot.icon || "/icons/logo1.png"} 
         height={size === "default" ? 50 : 32}
@@ -631,7 +631,7 @@ function ChatMessages({
     showAvatar = true,
     avatarSize = "default" 
   }: {
-    message: ChatMessage;
+    message: Message;
     isUser: boolean;
     showAvatar?: boolean;
     avatarSize?: "small" | "default";
@@ -659,9 +659,9 @@ function ChatMessages({
               __html: sanitizedHTML(message.content).replace(/<a /g, `<a target="_blank" rel="noopener noreferrer" `)
             }}
           />
-          {message.timestamp && (
+          {message.createdAt && (
             <div className={`text-xs mt-2 ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-              {formatTime(message.timestamp)}
+              {formatTime(message.createdAt)}
             </div>
           )}
         </div>
@@ -729,7 +729,7 @@ function ChatMessages({
           <MessageBubble
             key={index}
             message={message}
-            isUser={message.role === 'user'}
+            isUser={message.senderType === 'USER'}
           />
         ))}
         
@@ -738,7 +738,7 @@ function ChatMessages({
           <div className="flex justify-center animate-in fade-in zoom-in-95">
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-4 max-w-md w-full">
               <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <UserPlus className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1">

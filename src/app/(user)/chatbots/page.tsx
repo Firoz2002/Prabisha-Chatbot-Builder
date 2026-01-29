@@ -500,7 +500,7 @@ export default function ChatbotsPage() {
                           {chatbot.name}
                         </Link>
                         {chatbot.description && (
-                          <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          <span className="text-xs text-muted-foreground truncate max-w-50">
                             {chatbot.description}
                           </span>
                         )}

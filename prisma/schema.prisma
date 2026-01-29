@@ -66,6 +66,8 @@ model User {
   accounts   Account[]
   sessions   Session[]
   workspaces WorkspaceMember[]
+  sentWorkspaceInvitations WorkspaceInvitation[] @relation("SentWorkspaceInvitations")
+  acceptedWorkspaceInvitations WorkspaceInvitation[] @relation("AcceptedWorkspaceInvitations")
 }
 
 model Workspace {
@@ -73,8 +75,9 @@ model Workspace {
   name      String
   createdAt DateTime @default(now())
 
-  members  WorkspaceMember[]
-  chatbots Chatbot[]
+  members      WorkspaceMember[]
+  invitations  WorkspaceInvitation[] // Added this
+  chatbots     Chatbot[]
 }
 
 model WorkspaceMember {
@@ -86,6 +89,8 @@ model WorkspaceMember {
 
   user      User      @relation(fields: [userId], references: [id])
   workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  invitations WorkspaceInvitation[] @relation("MemberInvitations") // Added relation name
 
   @@unique([userId, workspaceId])
 }
@@ -405,4 +410,45 @@ model DocumentVector {
   @@index([knowledgeBaseId])
   @@index([documentId])
   @@index([createdAt])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+  REJECTED
+}
+
+model WorkspaceInvitation {
+  id           String           @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  status       InvitationStatus @default(PENDING)
+  token        String           @unique
+  role         WorkspaceRole    @default(MEMBER)
+  expiresAt    DateTime
+  
+  invitedById  String
+  invitedBy    User             @relation(fields: [invitedById], references: [id], onDelete: Cascade, name: "SentWorkspaceInvitations")
+  invitedToId  String?
+  invitedTo    User?             @relation(fields: [invitedToId], references: [id], onDelete: Cascade, name: "AcceptedWorkspaceInvitations")
+
+  email        String?
+
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Added relation to WorkspaceMember
+  memberId     String?
+  member       WorkspaceMember? @relation(fields: [memberId], references: [id], onDelete: SetNull, name: "MemberInvitations")
+
+  @@unique([workspaceId, invitedToId, status])
+  @@index([token])
+  @@index([email])
+  @@index([expiresAt])
+  @@index([invitedById])
+  @@index([invitedToId])
+  @@index([workspaceId, invitedToId, status])
+  @@index([memberId])
 }

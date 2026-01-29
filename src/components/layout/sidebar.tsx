@@ -19,6 +19,7 @@ import {
   SquareTerminal,
   Sun,
   NotebookPen,
+  UserRoundPlus,
 } from "lucide-react"
 import {
   Sidebar,
@@ -112,6 +113,11 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
             icon: MessageCircle,
             title: "Conversations",
             url: "/conversations",
+          },
+          {
+            icon: UserRoundPlus,
+            title: "Invites",
+            url: "/invites",
           },
           {
             icon: NotebookPen,
@@ -402,6 +408,24 @@ function WorkspaceSwitcher({
     toast.success("Workspace added successfully!")
   }
 
+  // Handle workspace renaming
+  const handleRenameWorkspace = async (workspaceId: string, newDisplayName: string) => {
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: newDisplayName })
+      })
+      
+      if (response.ok) {
+        toast.success('Workspace renamed successfully')
+        // Refresh workspaces or update locally
+      }
+    } catch (error) {
+      toast.error('Failed to rename workspace')
+    }
+  }
+
   if (loading) {
     return (
       <SidebarMenu>
@@ -464,7 +488,7 @@ function WorkspaceSwitcher({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-70 rounded-lg"
             align="start"
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
@@ -472,11 +496,34 @@ function WorkspaceSwitcher({
             <DropdownMenuLabel className="text-muted-foreground text-xs">Workspaces</DropdownMenuLabel>
             {workspaces.map((workspace, index) => (
               <DropdownMenuItem
-                key={workspace.id || workspace.name}
+                key={workspace.id}
                 onClick={() => setActiveWorkspace(workspace)}
-                className="gap-2 p-2"
+                className="gap-2 p-2 group"
               >
-                {workspace.name}
+                <div className="flex flex-col flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className={`flex size-6 items-center justify-center rounded-md ${
+                      workspace.role === 'OWNER' 
+                        ? 'bg-primary/10' 
+                        : 'bg-secondary/10'
+                    }`}>
+                      <GalleryVerticalEnd className="size-3" />
+                    </div>
+                    <span className="truncate font-medium">
+                      {workspace.name}
+                    </span>
+                    {workspace.role === 'OWNER' && (
+                      <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                        Owner
+                      </span>
+                    )}
+                  </div>
+                  {workspace.owner && workspace.role !== 'OWNER' && (
+                    <span className="text-xs text-muted-foreground truncate mt-1">
+                      Owned by {workspace.owner.name || workspace.owner.email}
+                    </span>
+                  )}
+                </div>
                 <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
               </DropdownMenuItem>
             ))}

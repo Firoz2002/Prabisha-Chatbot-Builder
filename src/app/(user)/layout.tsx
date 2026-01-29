@@ -1,6 +1,9 @@
 "use client";
 
-import { useParams, usePathname } from "next/navigation"
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useParams, usePathname, useSearchParams } from "next/navigation"
 import AppSidebar from "@/components/layout/sidebar"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -17,6 +20,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { WorkspaceProvider } from "@/providers/workspace-provider";
+import { Loader2 } from "lucide-react"; // Optional: for loading spinner
 
 // Define breadcrumb mappings
 const BREADCRUMB_MAPPINGS: Record<string, { label: string; href: string }> = {
@@ -39,8 +43,20 @@ interface BreadcrumbItemData {
 }
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const params = useParams();
   const pathname = usePathname();
+
+  // Check session and redirect if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      const queryString = searchParams.toString();
+      const callbackUrl = queryString ? `${pathname}?${queryString}` : pathname;
+      router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    }
+  }, [status, pathname, searchParams, router]);
 
   // Generate breadcrumbs based on the current path
   const generateBreadcrumbs = (): BreadcrumbItemData[] => {
@@ -90,6 +106,22 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
 
   const breadcrumbs = generateBreadcrumbs();
 
+  // Show loading state while checking session
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Loading...</span>
+      </div>
+    );
+  }
+
+  // Don't render anything if not authenticated (will redirect)
+  if (status === "unauthenticated") {
+    return null;
+  }
+
+  // Only render the layout when authenticated
   return (
     <WorkspaceProvider>
       <SidebarProvider>
