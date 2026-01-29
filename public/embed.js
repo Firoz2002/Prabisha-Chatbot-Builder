@@ -220,9 +220,9 @@
 
   function getButtonSize() {
     switch(config.buttonSize) {
-      case 'small': return '70px';
-      case 'large': return '90px';
-      default: return '80px';
+      case 'small': return '50px';
+      case 'large': return '80px';
+      default: return '70px';
     }
   }
 
