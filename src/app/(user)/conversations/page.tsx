@@ -191,20 +191,23 @@ export default function ConversationsPage() {
       const csvData = [
         ['Timestamp', 'Sender', 'Message'],
         ...messagesData.map((msg: Message) => [
-          format(new Date(msg.createdAt), 'yyyy-MM-dd HH:mm:ss'),
+          msg.createdAt ? format(new Date(msg.createdAt), 'yyyy-MM-dd HH:mm:ss') : '',
           msg.senderType === 'USER' ? 'User' : 'Assistant',
           msg.content.replace(/"/g, '""')
         ])
       ].map((row: string[]) => row.map((cell: string) => `"${cell}"`).join(',')).join('\n');
-
+      
       const blob = new Blob([csvData], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `conversation_${selectedConversation.id}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting conversation:', error);
+      console.error(error);
     }
   };
 
