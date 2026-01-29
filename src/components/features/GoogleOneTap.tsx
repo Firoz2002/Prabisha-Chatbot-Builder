@@ -130,7 +130,7 @@ export default function GoogleOneTap() {
 
   return (
     <Script
-      src="https://accounts.google.com/gsi/client"
+      src="https://chatbots.google.com/gsi/client"
       async
       defer
       onLoad={() => setIsGoogleScriptLoaded(true)}

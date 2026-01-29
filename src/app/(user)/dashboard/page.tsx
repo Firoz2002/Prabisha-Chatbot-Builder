@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -86,7 +87,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
           <p className="mt-4 text-slate-600">Loading dashboard...</p>
@@ -118,10 +119,18 @@ export default function DashboardPage() {
 
   if (!data) return null;
 
-  const { stats, conversationData, chatbotPerformance, leadSourceData, flowTypeData, hourlyActivity, logicTypeUsage } = data;
+  const { stats, conversationData, chatbotPerformance, leadSourceData, hourlyActivity, logicTypeUsage } = data;
+
+  // Flow Type Data (placeholder)
+  const flowTypeData = [
+    { name: 'Lead Generation', value: 45, color: 'hsl(217, 91%, 60%)' },
+    { name: 'Customer Support', value: 32, color: 'hsl(263, 70%, 60%)' },
+    { name: 'Product Discovery', value: 23, color: 'hsl(142, 76%, 45%)' },
+    { name: 'Appointment Booking', value: 18, color: 'hsl(25, 95%, 53%)' },
+  ];
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -141,7 +150,7 @@ export default function DashboardPage() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow">
+          <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow bg-white">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">Total Chatbots</CardTitle>
               <Bot className="h-4 w-4 text-blue-500" />
@@ -152,7 +161,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-purple-500 hover:shadow-lg transition-shadow">
+          <Card className="border-l-4 border-l-purple-500 hover:shadow-lg transition-shadow bg-white">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">Conversations</CardTitle>
               <MessageSquare className="h-4 w-4 text-purple-500" />
@@ -163,7 +172,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-emerald-500 hover:shadow-lg transition-shadow">
+          <Card className="border-l-4 border-l-emerald-500 hover:shadow-lg transition-shadow bg-white">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">Total Leads</CardTitle>
               <Users className="h-4 w-4 text-emerald-500" />
@@ -174,7 +183,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-orange-500 hover:shadow-lg transition-shadow">
+          <Card className="border-l-4 border-l-orange-500 hover:shadow-lg transition-shadow bg-white">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">Avg Response Time</CardTitle>
               <Clock className="h-4 w-4 text-orange-500" />
@@ -189,7 +198,7 @@ export default function DashboardPage() {
         {/* Main Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Conversations Trend */}
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow bg-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-blue-500" />
@@ -225,7 +234,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Chatbot Performance */}
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow bg-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5 text-purple-500" />
@@ -254,7 +263,7 @@ export default function DashboardPage() {
         {/* Secondary Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Lead Sources */}
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow bg-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-emerald-500" />
@@ -288,7 +297,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Flow Types */}
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow bg-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-orange-500" />
@@ -299,13 +308,13 @@ export default function DashboardPage() {
             <CardContent>
               <div className="space-y-4">
                 {flowTypeData.map((flow, index) => {
-                  const maxCount = Math.max(...flowTypeData.map(f => f.count || f.value));
-                  const percentage = ((flow.count || flow.value) / maxCount) * 100;
+                  const maxValue = Math.max(...flowTypeData.map(f => f.value));
+                  const percentage = (flow.value / maxValue) * 100;
                   return (
                     <div key={index} className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-slate-700">{flow.name}</span>
-                        <span className="text-sm font-bold text-slate-900">{flow.count || flow.value}</span>
+                        <span className="text-sm font-bold text-slate-900">{flow.value}</span>
                       </div>
                       <div className="w-full bg-slate-200 rounded-full h-2">
                         <div
@@ -324,7 +333,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Logic Type Usage */}
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow bg-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-cyan-500" />
@@ -334,17 +343,22 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {logicTypeUsage.map((logic, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
-                    <div className="flex-1">
-                      <div className="font-medium text-slate-900">{logic.name}</div>
-                      <div className="text-xs text-slate-600">{logic.count || logic.value} uses</div>
+                {logicTypeUsage.map((logic, index) => {
+                  const totalValue = logicTypeUsage.reduce((acc, l) => acc + l.value, 0);
+                  const percentage = totalValue > 0 ? Math.round((logic.value / totalValue) * 100) : 0;
+                  
+                  return (
+                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                      <div className="flex-1">
+                        <div className="font-medium text-slate-900">{logic.name}</div>
+                        <div className="text-xs text-slate-600">{logic.value} uses</div>
+                      </div>
+                      <Badge variant="secondary" className="ml-2">
+                        {percentage}%
+                      </Badge>
                     </div>
-                    <Badge variant="secondary" className="ml-2">
-                      {logic.percentage || Math.round((logic.value / logicTypeUsage.reduce((acc, l) => acc + (l.count || l.value), 0)) * 100)}%
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -352,7 +366,7 @@ export default function DashboardPage() {
 
         {/* Hourly Activity & Recent Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow bg-white">
             <CardHeader>
               <CardTitle>Activity by Hour</CardTitle>
               <CardDescription>Peak usage times throughout the day</CardDescription>
@@ -372,7 +386,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow">
+          <Card className="hover:shadow-lg transition-shadow bg-white">
             <CardHeader>
               <CardTitle>Quick Stats</CardTitle>
               <CardDescription>Additional insights</CardDescription>

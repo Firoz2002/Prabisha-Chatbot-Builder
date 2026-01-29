@@ -137,7 +137,7 @@ export default function AcceptInvitePage() {
         // Redirect after successful action
         setTimeout(() => {
           if (action === 'accept') {
-            router.push('/accounts');
+            router.push('/chatbots');
           } else {
             router.push('/');
           }
@@ -270,7 +270,7 @@ export default function AcceptInvitePage() {
                 </div>
               </div>
             )}
-            <Button onClick={() => router.push('/accounts')} className="w-full">
+            <Button onClick={() => router.push('/chatbots')} className="w-full">
               {isAccepted ? 'Go to Dashboard' : 'Go to Homepage'}
             </Button>
           </CardContent>

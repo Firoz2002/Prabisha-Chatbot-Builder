@@ -1,26 +1,26 @@
-// contexts/chatbot-context.tsx
 "use client"
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
+// Update the interface to match database field names
 interface ChatbotConfig {
   id: string;
   name: string;
   greeting: string;
   directive: string;
-  theme: 'light' | 'dark';
+  theme: string;
   avatar: string | null;
   avatarSize: number;
   avatarColor: string;
-  avatarBorder: string;
+  avatarBorder: string; 
   avatarBgColor: string;
   icon: string | null;
   iconSize: number;
   iconColor: string;
-  iconShape: string;
+  iconShape: string; 
   iconBorder: string;
   iconBgColor: string;
-  popupOnload: boolean;
+  popup_onload: boolean;
 }
 
 interface ChatbotContextType {
@@ -34,19 +34,19 @@ const defaultConfig: ChatbotConfig = {
   name: '',
   greeting: 'How can I help you today?',
   directive: '',
-  theme: 'light',
+  theme: '',
   avatar: null,
   avatarSize: 50,
-  avatarColor: 'blue',
-  avatarBorder: 'flat',
-  avatarBgColor: 'blue',
+  avatarColor: '',
+  avatarBorder: '',
+  avatarBgColor: '',
   icon: null,
   iconSize: 50,
-  iconColor: 'white',
-  iconShape: 'round',
-  iconBorder: 'flat',
-  iconBgColor: 'blue',
-  popupOnload: false,
+  iconColor: '',
+  iconShape: '',
+  iconBorder: '',
+  iconBgColor: '',
+  popup_onload: false,
 };
 
 const ChatbotContext = createContext<ChatbotContextType | undefined>(undefined);
@@ -63,6 +63,19 @@ export function ChatbotProvider({
     id: initialId,
   });
 
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    const initializeConfig = async () => {
+      if (initialId && !isInitialized) {
+        await refreshConfig();
+        setIsInitialized(true);
+      }
+    };
+    
+    initializeConfig();
+  }, [initialId, isInitialized]);
+
   const updateConfig = (updates: Partial<ChatbotConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
   };
@@ -72,7 +85,28 @@ export function ChatbotProvider({
       const response = await fetch(`/api/chatbots/${initialId}`);
       if (response.ok) {
         const data = await response.json();
-        setConfig(prev => ({ ...prev, ...data }));
+        
+        const transformedData: ChatbotConfig = {
+          id: data.id || '',
+          name: data.name || '',
+          greeting: data.greeting || 'How can I help you today?',
+          directive: data.directive || '',
+          theme: data.theme || '',
+          avatar: data.avatar,
+          avatarSize: data.avatarSize || 50,
+          avatarColor: data.avatarColor || '',
+          avatarBorder: data.avatarBorder?.toLowerCase() || '',
+          avatarBgColor: data.avatarBgColor || '',
+          icon: data.icon,
+          iconSize: data.iconSize || 50,
+          iconColor: data.iconColor || '',
+          iconShape: data.iconShape?.toLowerCase() || '',
+          iconBorder: data.iconBorder?.toLowerCase() || '',
+          iconBgColor: data.iconBgColor || '',
+          popup_onload: data.popup_onload || false,
+        };
+        
+        setConfig(prev => ({ ...prev, ...transformedData }));
       }
     } catch (error) {
       console.error('Failed to refresh config:', error);

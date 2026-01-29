@@ -5,14 +5,17 @@ import { useState, useEffect } from "react"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Check, Info, Loader2, Sparkles } from "lucide-react"
+import { Check, Info, Loader2 } from "lucide-react"
 import { useChatbot } from "@/providers/chatbot-provider"
 
-import { Message } from "@/types/chat"
+interface Message {
+  senderType: "USER" | "BOT";
+  content: string;
+}
 
 export default function InstructionsPage() {
   const { config, updateConfig, refreshConfig } = useChatbot();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { senderType: "BOT", content: config.greeting }
@@ -25,9 +28,10 @@ export default function InstructionsPage() {
 
   // Sync local state when config changes
   useEffect(() => {
+    refreshConfig();
     setName(config.name || "");
-    setGreeting(config.greeting || "How can I help you today?");
     setDirective(config.directive || "");
+    setGreeting(config.greeting || "How can I help you today?");
     setMessages([{ senderType: "BOT", content: config.greeting || "How can I help you today?" }]);
   }, [config]);
 
@@ -44,6 +48,7 @@ export default function InstructionsPage() {
       // Update local context immediately for better UX
       updateConfig(updates);
 
+      // Use FormData for consistency with PUT endpoint
       const formData = new FormData();
       formData.append("name", name);
       formData.append("greeting", greeting);
@@ -55,7 +60,8 @@ export default function InstructionsPage() {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       
       // Refresh config from server to ensure consistency
@@ -64,22 +70,19 @@ export default function InstructionsPage() {
       toast.success("Changes saved successfully!");
       
       // Update chat messages with new greeting
-      if (messages.length === 1 && messages[0].senderType === "BOT") {
-        setMessages([{ senderType: "BOT", content: greeting }]);
-      }
+      setMessages([{ senderType: "BOT", content: greeting }]);
     } catch (error) {
       console.error("Error saving changes:", error);
-      toast.error("Failed to save changes");
-      // Optionally revert context update on error
+      toast.error(error instanceof Error ? error.message : "Failed to save changes");
     } finally {
       setIsLoading(false);
     }
   }
 
-  // If config is still loading, show loading state
+  // If config is still loading or id is empty, show loading state
   if (!config.id) {
     return (
-      <div className="flex min-h-100 w-full items-center justify-center">
+      <div className="flex min-h-[100px] w-full items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -101,10 +104,7 @@ export default function InstructionsPage() {
           <Textarea
             id="name"
             value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              updateConfig({ name: e.target.value });
-            }}
+            onChange={(e) => setName(e.target.value)}
             className="min-h-10 resize-none"
             placeholder="Enter your chatbot name..."
             rows={1}
@@ -126,11 +126,8 @@ export default function InstructionsPage() {
           <Textarea
             id="greeting"
             value={greeting}
-            onChange={(e) => {
-              setGreeting(e.target.value);
-              updateConfig({ greeting: e.target.value });
-            }}
-            className="min-h-30 resize-none"
+            onChange={(e) => setGreeting(e.target.value)}
+            className="min-h-[120px] resize-none"
             placeholder="How can I help you today?"
             rows={4}
           />
@@ -154,11 +151,8 @@ export default function InstructionsPage() {
           <Textarea
             id="directive"
             value={directive}
-            onChange={(e) => {
-              setDirective(e.target.value);
-              updateConfig({ directive: e.target.value });
-            }}
-            className="min-h-70 font-mono text-sm resize-none"
+            onChange={(e) => setDirective(e.target.value)}
+            className="min-h-[280px] font-mono text-sm resize-none"
             placeholder={`Example: You are a helpful customer support assistant for an e-commerce store. 
 - Always be polite and professional
 - Keep responses concise

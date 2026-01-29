@@ -281,14 +281,14 @@ export const createWorkspaceInvitationEmail = (
         </div>
         
         <div class="footer">
-            <p>© ${new Date().getFullYear()} Digital Marketing Automation. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} Prabisha Chatbots. All rights reserved.</p>
             <div class="footer-links">
                 <a href="https://yourdomain.com/help">Help Center</a>
                 <a href="https://yourdomain.com/privacy">Privacy Policy</a>
                 <a href="https://yourdomain.com/terms">Terms of Service</a>
             </div>
             <div class="powered-by">
-                Powered by Digital Marketing Automation Platform
+                Powered by Prabisha Chatbots Platform
             </div>
         </div>
     </div>

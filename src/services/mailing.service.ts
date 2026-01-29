@@ -86,13 +86,13 @@ export const sendMail = async ({
     await Promise.race([verifyPromise, timeoutPromise]);
 
     const mailOptions: nodemailer.SendMailOptions = {
-      from: process.env.EMAIL_FROM || `"Digital Marketing Automation" <${process.env.SMTP_USER}>`,
+      from: process.env.EMAIL_FROM || `"Prabisha Chatbots" <${process.env.SMTP_USER}>`,
       to: recipient,
       subject: subject,
       html: message,
       attachments,
       headers: {
-        'X-Mailer': 'Digital Marketing Automation Service',
+        'X-Mailer': 'Prabisha Chatbots Service',
         'X-Priority': '1'
       },
       // Add encoding to prevent issues with special characters

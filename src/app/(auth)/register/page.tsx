@@ -55,13 +55,13 @@ export default function RegisterPage() {
         email: formData.email,
         password: formData.password,
         redirect: false,
-        callbackUrl: "/accounts",
+        callbackUrl: "/chatbots",
       })
 
       if (result?.error) throw new Error(result.error)
 
       toast.success("Registration successful!")
-      router.push("/accounts")
+      router.push("/chatbots")
     } catch (error) {
       console.error("Registration error:", error)
       toast.error(error instanceof Error ? error.message : "Registration failed")
@@ -73,7 +73,7 @@ export default function RegisterPage() {
   const handleGoogleLogin = async () => {
     try {
       setIsLoading(true)
-      await signIn("google", { callbackUrl: "/accounts", redirect: false })
+      await signIn("google", { callbackUrl: "/chatbots", redirect: false })
     } catch (error) {
       console.error("Google login error:", error)
       toast.error("Failed to sign in with Google. Please try again.")
