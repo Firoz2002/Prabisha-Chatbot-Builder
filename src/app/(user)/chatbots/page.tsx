@@ -2,7 +2,7 @@
 import Image from "next/image"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Bookmark, RotateCcw, Plus, MoreVertical, MessageSquareText, Bot, BookA } from "lucide-react"
+import { Search, Bookmark, RotateCcw, Plus, MoreVertical, MessageSquareText, Bot, BookA, Trash } from "lucide-react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -469,7 +469,7 @@ export default function ChatbotsPage() {
               <TableHead>Model</TableHead>
               <TableHead>Knowledge Bases</TableHead>
               <TableHead>Last modified</TableHead>
-              <TableHead className="w-10"></TableHead>
+              <TableHead> Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -541,28 +541,12 @@ export default function ChatbotsPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(chatbot.id)}>
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDuplicate(chatbot)}>
-                          Duplicate
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>Share</DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive"
-                          onClick={() => handleDelete(chatbot)}
-                        >
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleDelete(chatbot)}
+                    >
+                      <Trash className="h-4 w-4 text-red-500" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
