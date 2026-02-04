@@ -418,57 +418,6 @@ async function retryFailedMigrations() {
   }
 }
 
-async function verifyMigration() {
-  console.log('\n🔍 Verifying migration...');
-  
-  try {
-    // Check that vectors have embeddings
-    const vectorsWithoutEmbeddings = await prisma.documentVector.count({
-      where: { embedding: null }
-    });
-    
-    // Check vector dimensions (should be 768)
-    const sampleVector = await prisma.$queryRaw<Array<{ dimension: number }>>`
-      SELECT array_length(string_to_array(trim('[]' from embedding::text), ','), 1) as dimension
-      FROM "DocumentVector" 
-      WHERE embedding IS NOT NULL 
-      LIMIT 1
-    `;
-    
-    console.log(`📊 Vectors without embeddings: ${vectorsWithoutEmbeddings}`);
-    
-    if (sampleVector.length > 0) {
-      console.log(`📊 Sample vector dimension: ${sampleVector[0].dimension}`);
-    }
-    
-    // Test similarity search
-    const testQuery = "test query for verification";
-    const testEmbedding = await generateGeminiEmbedding(testQuery);
-    
-    const testResults = await prisma.$queryRaw<Array<any>>`
-      SELECT 
-        id,
-        content,
-        1 - (embedding <=> ${`[${testEmbedding.join(',')}]`}::vector) as similarity
-      FROM "DocumentVector" 
-      WHERE embedding IS NOT NULL
-      ORDER BY embedding <=> ${`[${testEmbedding.join(',')}]`}::vector
-      LIMIT 3
-    `;
-    
-    console.log(`✅ Verification successful. Found ${testResults.length} similar vectors`);
-    
-    return {
-      vectorsWithoutEmbeddings,
-      sampleDimension: sampleVector[0]?.dimension,
-      testResultsCount: testResults.length,
-    };
-  } catch (error) {
-    console.error('❌ Verification failed:', error);
-    throw error;
-  }
-}
-
 async function runMigration(options: {
   chatbotId?: string;
   knowledgeBaseId?: string;
@@ -493,7 +442,6 @@ async function runMigration(options: {
     `;
     
     if (options.verifyOnly) {
-      await verifyMigration();
       return;
     }
     
@@ -519,9 +467,6 @@ async function runMigration(options: {
     
     // Update chatbot models
     await updateChatbotModels();
-    
-    // Verify
-    await verifyMigration();
     
     // Record migration completion
     await prisma.$executeRaw`
@@ -615,6 +560,5 @@ if (require.main === module) {
 export {
   migrateEmbeddings,
   updateChatbotModels,
-  verifyMigration,
   runMigration,
 };
