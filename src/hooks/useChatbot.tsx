@@ -37,7 +37,7 @@ interface UseChatbotReturn {
   conversationId: string | null;
   hasLoadedInitialMessages: boolean;
   quickQuestions: string[];
-  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  handleSubmit: (e?: React.FormEvent, overrideText?: string) => Promise<void>;
   handleQuickQuestion: (question: string) => Promise<void>;
   handleNewChat: () => void;
   formatTime: (date?: Date) => string;
@@ -222,10 +222,10 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
   }, [hasLoadedInitialMessages]);
 
   // Handle form submission - Conversation created automatically by API
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, overrideText?: string) => {
+    if (e) e.preventDefault();
     
-    const searchQuery = text.trim();
+    const searchQuery = (overrideText || text).trim();
     if (!searchQuery) {
       setError('Please enter a message');
       return;
@@ -242,6 +242,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     setLoading(true);
     setStatus('submitted');
     setError('');
+    
     setText('');
     
     setTimeout(() => {
@@ -316,12 +317,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     if (loading) return;
     
     setText(question);
-    
-    const fakeEvent = {
-      preventDefault: () => {},
-    } as React.FormEvent<HTMLFormElement>;
-    
-    await handleSubmit(fakeEvent);
+    await handleSubmit(undefined, question);
   };
 
   // Handle new chat - Just reset UI, don't create conversation yet

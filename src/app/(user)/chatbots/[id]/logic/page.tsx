@@ -3,17 +3,20 @@
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { List, Link2, Calendar } from "lucide-react"
+import { List, Link2, Calendar, Lightbulb } from "lucide-react"
 
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 import { LinkButtonForm } from "@/components/forms/link-button-form";
 import { CollectLeadsForm } from "@/components/forms/collect-leads-form";
 import { ScheduleMeetingForm } from "@/components/forms/schedule-meeting-form";
 
 import { ChatbotLogic } from "@/types/chatbot-logic"
+import { useChatbot } from "@/providers/chatbot-provider"
 
 interface Feature {
   id: string
@@ -37,10 +40,22 @@ export default function LogicPage() {
   const params = useParams();
   const router = useRouter();
   const chatbotId = params.id as string;
+  const { config, addSuggestion, removeSuggestion, updateSuggestion, clearSuggestions } = useChatbot();
+  
   const [activeTab, setActiveTab] = useState("features")
   const [isLoading, setIsLoading] = useState(false)
   const [existingLogic, setExistingLogic] = useState<ChatbotLogic | null>(null)
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null)
+  
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>(config.suggestions || [])
+  const [newSuggestion, setNewSuggestion] = useState("")
+  const [isSavingSuggestions, setIsSavingSuggestions] = useState(false)
+
+  // Sync suggestions from config
+  useEffect(() => {
+    setSuggestions(config.suggestions || [])
+  }, [config.suggestions])
 
   // Fetch existing logic when component mounts
   useEffect(() => {
@@ -78,7 +93,63 @@ export default function LogicPage() {
       title: "Schedule meeting",
       description: "Display inline calendar for scheduling",
     },
+    {
+      id: "suggestions",
+      icon: <Lightbulb className="w-5 h-5" />,
+      title: "Quick Suggestions",
+      description: "Manage quick suggestions for users",
+      badge: "New"
+    },
   ]
+
+  // Suggestions management functions
+  const handleAddSuggestion = () => {
+    if (newSuggestion.trim()) {
+      addSuggestion(newSuggestion.trim())
+      setNewSuggestion("")
+    }
+  }
+
+  const handleRemoveSuggestion = (index: number) => {
+    removeSuggestion(index)
+  }
+
+  const handleUpdateSuggestion = (index: number, value: string) => {
+    if (value.trim()) {
+      updateSuggestion(index, value)
+    }
+  }
+
+  const handleClearSuggestions = () => {
+    if (confirm('Are you sure you want to clear all suggestions?')) {
+      clearSuggestions()
+    }
+  }
+
+  const handleSaveSuggestions = async () => {
+    setIsSavingSuggestions(true)
+    try {
+      const formData = new FormData()
+      formData.append("suggestions", JSON.stringify(suggestions))
+
+      const response = await fetch(`/api/chatbots/${config.id}`, {
+        method: "PUT",
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+      
+      toast.success("Suggestions saved successfully!")
+    } catch (error) {
+      console.error("Error saving suggestions:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to save suggestions")
+    } finally {
+      setIsSavingSuggestions(false)
+    }
+  }
 
   const handleSaveLogic = async (logicData: Partial<ChatbotLogic>, formData?: any) => {
     setIsLoading(true)
@@ -248,7 +319,8 @@ export default function LogicPage() {
                 const isEnabled = 
                   (feature.id === "collect-leads" && existingLogic?.leadCollectionEnabled) ||
                   (feature.id === "link-button" && existingLogic?.linkButtonEnabled) ||
-                  (feature.id === "schedule-meeting" && existingLogic?.meetingScheduleEnabled)
+                  (feature.id === "schedule-meeting" && existingLogic?.meetingScheduleEnabled) ||
+                  (feature.id === "suggestions" && suggestions.length > 0)
 
                 return (
                   <Card
@@ -270,7 +342,9 @@ export default function LogicPage() {
                                 variant="outline" 
                                 className="text-xs h-5 bg-green-50 text-green-700 border-green-200"
                               >
-                                Configured
+                                {feature.id === "suggestions" 
+                                  ? `${suggestions.length} configured` 
+                                  : "Configured"}
                               </Badge>
                             )}
                             {feature.badge && (
@@ -285,7 +359,7 @@ export default function LogicPage() {
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground">{feature.description}</p>
-                      {isEnabled && (
+                      {isEnabled && feature.id !== "suggestions" && (
                         <div className="flex justify-end gap-2 mt-2">
                           <button
                             onClick={(e) => {
@@ -331,6 +405,113 @@ export default function LogicPage() {
                   isLoading={isLoading}
                   initial={getFeatureConfig(feature.id)}
                 />
+              )}
+              {feature.id === "suggestions" && (
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">Manage Quick Suggestions</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Add quick suggestions that users can click to start conversations.
+                      </p>
+                    </div>
+
+                    {/* Add new suggestion */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Add New Suggestion</label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={newSuggestion}
+                          onChange={(e) => setNewSuggestion(e.target.value)}
+                          placeholder="Enter a quick suggestion..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              handleAddSuggestion()
+                            }
+                          }}
+                        />
+                        <Button
+                          onClick={handleAddSuggestion}
+                          disabled={!newSuggestion.trim()}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Suggestions list */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">
+                          Suggestions ({suggestions.length})
+                        </label>
+                        {suggestions.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearSuggestions}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            Clear All
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {suggestions.length > 0 ? (
+                        <div className="space-y-2">
+                          {suggestions.map((suggestion, index) => (
+                            <div key={index} className="flex items-center gap-2 group">
+                              <Input
+                                value={suggestion}
+                                onChange={(e) => handleUpdateSuggestion(index, e.target.value)}
+                                placeholder={`Suggestion ${index + 1}`}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveSuggestion(index)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center p-6 border border-dashed rounded-lg">
+                          <Lightbulb className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            No suggestions yet. Add some quick suggestions to help users start conversations.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Save button */}
+                    <div className="pt-4">
+                      <Button
+                        className="w-full"
+                        onClick={handleSaveSuggestions}
+                        disabled={isSavingSuggestions}
+                      >
+                        {isSavingSuggestions ? "Saving..." : "Save Suggestions"}
+                      </Button>
+                    </div>
+
+                    {/* Back button */}
+                    <div className="pt-2">
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={resetForm}
+                      >
+                        Back to Features
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               )}
             </TabsContent>
           ))}

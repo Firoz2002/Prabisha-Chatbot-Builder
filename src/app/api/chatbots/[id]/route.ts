@@ -22,26 +22,7 @@ export async function GET(
 
     // Find the chatbot
     const chatbot = await prisma.chatbot.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        greeting: true,
-        directive: true,
-        theme: true,
-        icon: true,
-        iconSize: true,
-        iconColor: true,
-        iconShape: true,
-        iconBorder: true,
-        iconBgColor: true,
-        avatar: true,
-        avatarSize: true,
-        avatarColor: true,
-        avatarBorder: true,
-        avatarBgColor: true,
-        popup_onload: true,
-      }
+      where: { id }
     })
 
     if (!chatbot) {
@@ -98,7 +79,12 @@ export async function PUT(request: NextRequest, context: RouterParams) {
     const popup_onload = formData.get('popup_onload') as string | null;
     const greeting = formData.get('greeting') as string | null;
     const directive = formData.get('directive') as string | null;
-
+    const description = formData.get('description') as string | null;
+    const suggestions = formData.get('suggestions') as string | null;
+    const model = formData.get('model') as string | null;
+    const max_tokens = formData.get('max_tokens') as string | null;
+    const temperature = formData.get('temperature') as string | null;
+console.log(suggestions);
     if (!id) {
       return NextResponse.json(
         { error: 'Chatbot ID is required' },
@@ -170,6 +156,47 @@ export async function PUT(request: NextRequest, context: RouterParams) {
       )
     }
 
+    // Parse suggestions if provided
+    let parsedSuggestions: string[] | undefined;
+    if (suggestions !== null) {
+      try {
+        parsedSuggestions = JSON.parse(suggestions);
+        // Validate it's an array of strings
+        if (!Array.isArray(parsedSuggestions) || !parsedSuggestions.every(item => typeof item === 'string')) {
+          return NextResponse.json(
+            { error: 'Suggestions must be a JSON array of strings' },
+            { status: 400 }
+          );
+        }
+      } catch (error) {
+        return NextResponse.json(
+          { error: 'Invalid JSON format for suggestions' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate model settings if provided
+    if (max_tokens !== null) {
+      const maxTokensNum = parseInt(max_tokens);
+      if (isNaN(maxTokensNum) || maxTokensNum < 1 || maxTokensNum > 4000) {
+        return NextResponse.json(
+          { error: 'max_tokens must be a number between 1 and 4000' },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (temperature !== null) {
+      const temperatureNum = parseFloat(temperature);
+      if (isNaN(temperatureNum) || temperatureNum < 0 || temperatureNum > 2) {
+        return NextResponse.json(
+          { error: 'temperature must be a number between 0 and 2' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Prepare update data
     const updateData: any = {};
     
@@ -190,6 +217,11 @@ export async function PUT(request: NextRequest, context: RouterParams) {
     if (popup_onload !== null) updateData.popup_onload = popup_onload === 'true';
     if (greeting !== null) updateData.greeting = greeting;
     if (directive !== null) updateData.directive = directive;
+    if (description !== null) updateData.description = description;
+    if (parsedSuggestions !== undefined) updateData.suggestions = parsedSuggestions;
+    if (model !== null) updateData.model = model;
+    if (max_tokens !== null) updateData.max_tokens = parseInt(max_tokens);
+    if (temperature !== null) updateData.temperature = parseFloat(temperature);
 
     const updatedChatbot = await prisma.chatbot.update({
       where: { id },

@@ -279,7 +279,7 @@ interface ChatBotProps {
   hasLoadedInitialMessages: boolean;
   quickQuestions: string[];
   conversationId: string | null;
-  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  handleSubmit: (e?: React.FormEvent, overrideText?: string) => Promise<void>;
   handleQuickQuestion: (question: string) => Promise<void>;
   handleNewChat: () => void;
   formatTime: (date?: Date) => string;
@@ -519,25 +519,32 @@ interface ChatHeaderProps {
 
 function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps) {
   return (
-    <div className={`bg-primary text-primary-foreground p-4 ${isMobile || isEmbedded ? 'rounded-none' : 'rounded-t-xl'} flex justify-between items-center overflow-visible z-10 relative`}>
-      <div className="relative flex items-center gap-3">
-        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md">
-          <Image 
-            src={chatbot.avatar || "/icons/logo.png"}
-            height={48}
-            width={48}
-            alt={chatbot.name || "Assistant"}
-            className="h-full w-full object-contain"
-            unoptimized 
-          />
-        </div>
-        
-        <div>
-          <h3 className="font-semibold text-lg">{chatbot.name || "Property Assistant"}</h3>
-          <p className="text-xs opacity-90">{chatbot.description || "I am here to help you."}</p>
-        </div>
+    <div className={`bg-primary text-primary-foreground ${isMobile || isEmbedded ? 'rounded-none' : 'rounded-t-xl'} flex items-stretch overflow-hidden z-10 relative`}>
+      
+      {/* 1. Avatar - No padding, spans full height */}
+      <div className="w-20 shrink-0"> 
+        <Image 
+          src={chatbot.avatar || "/icons/logo.png"}
+          height={64}
+          width={64}
+          alt={chatbot.name || "Assistant"}
+          className="h-full w-full object-cover" 
+          unoptimized 
+        />
       </div>
-      <div className="flex items-center gap-2">
+
+      {/* 2. Text Content - Padding applied here instead of parent */}
+      <div className="flex-grow flex flex-col justify-center px-2 py-3 min-w-0">
+        <h3 className="font-semibold text-lg truncate leading-tight">
+          {chatbot.name || "Property Assistant"}
+        </h3>
+        <p className="text-xs opacity-90 truncate">
+          {chatbot.description || "I am here to help you."}
+        </p>
+      </div>
+
+      {/* 3. Close Button - Padding applied here to keep it aligned */}
+      <div className="flex items-center pr-4">
         <button 
           onClick={onClose}
           className="p-2 rounded-full hover:bg-white/10 transition-colors"
@@ -546,6 +553,7 @@ function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps)
           <XIcon size={20} />
         </button>
       </div>
+      
     </div>
   );
 }
@@ -818,7 +826,7 @@ interface ChatInputProps {
   loading: boolean;
   isMicrophoneOn: boolean;
   browserSupportsSpeechRecognition: boolean;
-  onSubmit: (e: React.FormEvent) => Promise<void>;
+  onSubmit: (e?: React.FormEvent, overrideText?: string) => Promise<void>;
   onNewChat: () => void;
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   inputRef: React.RefObject<HTMLTextAreaElement | null>;

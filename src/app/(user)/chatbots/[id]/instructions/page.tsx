@@ -5,8 +5,9 @@ import { useState, useEffect } from "react"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Check, Info, Loader2 } from "lucide-react"
+import { Check, Info, Loader2, Plus, Trash2, X } from "lucide-react"
 import { useChatbot } from "@/providers/chatbot-provider"
+import { Input } from "@/components/ui/input"
 
 interface Message {
   senderType: "USER" | "BOT";
@@ -14,26 +15,33 @@ interface Message {
 }
 
 export default function InstructionsPage() {
-  const { config, updateConfig, refreshConfig } = useChatbot();
+  const { 
+    config, 
+    updateConfig, 
+    refreshConfig,
+  } = useChatbot();
 
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { senderType: "BOT", content: config.greeting }
-  ])
+  ]);
 
-  // Initialize local state from context
-  const [name, setName] = useState(config.name || "");
-  const [directive, setDirective] = useState(config.directive || "");
-  const [greeting, setGreeting] = useState(config.greeting || "How can I help you today?");
+  // Initialize local state from context - use a single useEffect
+  const [name, setName] = useState("");
+  const [directive, setDirective] = useState("");
+  const [greeting, setGreeting] = useState("");
+  const [description, setDescription] = useState("");
 
-  // Sync local state when config changes
+  // Single effect to initialize all state from config
   useEffect(() => {
-    refreshConfig();
-    setName(config.name || "");
-    setDirective(config.directive || "");
-    setGreeting(config.greeting || "How can I help you today?");
-    setMessages([{ senderType: "BOT", content: config.greeting || "How can I help you today?" }]);
-  }, [config]);
+    if (config.id) {
+      setName(config.name || "");
+      setDirective(config.directive || "");
+      setGreeting(config.greeting || "How can I help you today?");
+      setDescription(config.description || "");
+      setMessages([{ senderType: "BOT", content: config.greeting || "How can I help you today?" }]);
+    }
+  }, [config.id]); // Only re-run when config.id changes
 
   const handleSave = async () => {
     setIsLoading(true);
@@ -42,7 +50,9 @@ export default function InstructionsPage() {
       const updates = {
         name,
         greeting,
-        directive
+        directive,
+        description,
+        suggestions: config.suggestions // Use the suggestions from context, not local state
       };
 
       // Update local context immediately for better UX
@@ -53,7 +63,8 @@ export default function InstructionsPage() {
       formData.append("name", name);
       formData.append("greeting", greeting);
       formData.append("directive", directive);
-
+      formData.append("description", description);
+      
       const response = await fetch(`/api/chatbots/${config.id}`, {
         method: "PUT",
         body: formData,
@@ -109,6 +120,31 @@ export default function InstructionsPage() {
             placeholder="Enter your chatbot name..."
             rows={1}
           />
+        </div>
+      </div>
+
+      {/* Description Section */}
+      <div>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="description" className="text-sm font-medium">
+                Description
+              </Label>
+              <Info className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </div>
+          <Textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="min-h-[80px] resize-none"
+            placeholder="Describe your chatbot's purpose and functionality..."
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground mt-2">
+            A brief description of what your chatbot does
+          </p>
         </div>
       </div>
 

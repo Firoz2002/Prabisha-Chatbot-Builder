@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 
 // Update the interface to match database field names
 interface ChatbotConfig {
@@ -21,12 +21,21 @@ interface ChatbotConfig {
   iconBorder: string;
   iconBgColor: string;
   popup_onload: boolean;
+  suggestions: string[]; // Added suggestions array
+  description?: string; // Added description (optional)
+  model?: string;
+  max_tokens?: number;
+  temperature?: number;
 }
 
 interface ChatbotContextType {
   config: ChatbotConfig;
   updateConfig: (updates: Partial<ChatbotConfig>) => void;
   refreshConfig: () => Promise<void>;
+  addSuggestion: (suggestion: string) => void;
+  removeSuggestion: (index: number) => void;
+  updateSuggestion: (index: number, suggestion: string) => void;
+  clearSuggestions: () => void;
 }
 
 const defaultConfig: ChatbotConfig = {
@@ -47,6 +56,11 @@ const defaultConfig: ChatbotConfig = {
   iconBorder: '',
   iconBgColor: '',
   popup_onload: false,
+  suggestions: [], // Default empty suggestions array
+  description: '',
+  model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+  max_tokens: 500,
+  temperature: 0.7,
 };
 
 const ChatbotContext = createContext<ChatbotContextType | undefined>(undefined);
@@ -63,18 +77,18 @@ export function ChatbotProvider({
     id: initialId,
   });
 
-  const [isInitialized, setIsInitialized] = useState(false);
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
     const initializeConfig = async () => {
-      if (initialId && !isInitialized) {
+      if (initialId && !hasFetchedRef.current) {
         await refreshConfig();
-        setIsInitialized(true);
+        hasFetchedRef.current = true;
       }
     };
     
     initializeConfig();
-  }, [initialId, isInitialized]);
+  }, [initialId]);
 
   const updateConfig = (updates: Partial<ChatbotConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
@@ -104,6 +118,11 @@ export function ChatbotProvider({
           iconBorder: data.iconBorder?.toLowerCase() || '',
           iconBgColor: data.iconBgColor || '',
           popup_onload: data.popup_onload || false,
+          suggestions: data.suggestions || [], // Add suggestions from API
+          description: data.description || '',
+          model: data.model || 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+          max_tokens: data.max_tokens || 500,
+          temperature: data.temperature || 0.7,
         };
         
         setConfig(prev => ({ ...prev, ...transformedData }));
@@ -113,8 +132,51 @@ export function ChatbotProvider({
     }
   };
 
+  // Suggestion management methods
+  const addSuggestion = (suggestion: string) => {
+    if (suggestion.trim()) {
+      setConfig(prev => ({
+        ...prev,
+        suggestions: [...prev.suggestions, suggestion.trim()]
+      }));
+    }
+  };
+
+  const removeSuggestion = (index: number) => {
+    setConfig(prev => ({
+      ...prev,
+      suggestions: prev.suggestions.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateSuggestion = (index: number, suggestion: string) => {
+    if (suggestion.trim()) {
+      setConfig(prev => ({
+        ...prev,
+        suggestions: prev.suggestions.map((s, i) => 
+          i === index ? suggestion.trim() : s
+        )
+      }));
+    }
+  };
+
+  const clearSuggestions = () => {
+    setConfig(prev => ({
+      ...prev,
+      suggestions: []
+    }));
+  };
+
   return (
-    <ChatbotContext.Provider value={{ config, updateConfig, refreshConfig }}>
+    <ChatbotContext.Provider value={{ 
+      config, 
+      updateConfig, 
+      refreshConfig,
+      addSuggestion,
+      removeSuggestion,
+      updateSuggestion,
+      clearSuggestions
+    }}>
       {children}
     </ChatbotContext.Provider>
   );

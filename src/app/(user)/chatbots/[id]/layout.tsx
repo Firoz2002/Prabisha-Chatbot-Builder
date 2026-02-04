@@ -27,6 +27,7 @@ function ChatbotLayoutContent({ children, title }: { children: React.ReactNode, 
                     iconSize={config.iconSize}
                     iconColor={config.iconColor}
                     iconShape={config.iconShape}
+                    suggestions={config.suggestions} // Add this line
                     showPreviewControls={true}
                 />
             </div>

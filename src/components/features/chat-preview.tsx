@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Monitor, Smartphone, Send, Loader2 } from "lucide-react"
+import { RefreshCw, Monitor, Smartphone, Send, Loader2, Lightbulb } from "lucide-react"
 import { Chatbot, ShapeType, BorderType } from "../../../generated/prisma/browser";
 
 interface Message {
@@ -21,6 +21,9 @@ interface ChatProps {
   initialMessages?: Message[]
   onSendMessage?: (message: string, messages: Message[]) => Promise<string | void>
   showPreviewControls?: boolean
+  
+  // New props for suggestions
+  suggestions?: string[]
   
   // Theme props that can override database values
   avatar?: string | null
@@ -55,6 +58,9 @@ export default function ChatPreview({
   onSendMessage,
   showPreviewControls = false,
   
+  // New suggestions prop
+  suggestions: propSuggestions = [],
+  
   // Theme props with default values
   avatar: propAvatar,
   icon: propIcon,
@@ -83,6 +89,7 @@ export default function ChatPreview({
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatAreaRef = useRef<HTMLDivElement>(null)
+  const [showSuggestions, setShowSuggestions] = useState(true)
   
   // Colors mapping for default colors
   const colorMap: Record<string, string> = {
@@ -114,6 +121,9 @@ export default function ChatPreview({
   const theme = propTheme || chatbot?.theme || "light";
   const autoOpenChat = propAutoOpenChat ?? chatbot?.popup_onload ?? false;
   const autoGreeting = propAutoGreeting || false;
+  
+  // Get suggestions (props override database)
+  const suggestions = propSuggestions.length > 0 ? propSuggestions : (chatbot?.suggestions as string[] || []);
 
   // Helper function to convert ShapeType to string
   function getShapeTypeValue(shape: ShapeType | null | undefined): string {
@@ -220,14 +230,16 @@ export default function ChatPreview({
   // Initialize messages with greeting
   useEffect(() => {
     if (greeting && messages.length === 0) {
-      setMessages([{ role: "assistant", content: greeting }])
+      setMessages([{ role: "assistant", content: greeting }]);
+      setShowSuggestions(true);
     }
   }, [greeting, messages.length]);
 
   // Auto greeting on mount if enabled
   useEffect(() => {
     if (autoGreeting && greeting && messages.length === 0) {
-      setMessages([{ role: "assistant", content: greeting }])
+      setMessages([{ role: "assistant", content: greeting }]);
+      setShowSuggestions(true);
     }
   }, [autoGreeting, greeting, messages.length]);
 
@@ -254,14 +266,20 @@ export default function ChatPreview({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
-  const handleSendMessage = async () => {
-    if (!message.trim() || isLoading) return
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || message.trim();
+    if (!textToSend || isLoading) return
 
-    const userMessage = message.trim()
-    setMessage("")
+    // Clear the input if using the regular input field
+    if (!messageText) {
+      setMessage("")
+    }
+    
+    // Hide suggestions when user sends a message
+    setShowSuggestions(false);
     
     // Add user message to chat
-    const newMessages: Message[] = [...messages, { role: "user", content: userMessage }]
+    const newMessages: Message[] = [...messages, { role: "user", content: textToSend }]
     setMessages(newMessages)
     
     setIsLoading(true)
@@ -269,7 +287,7 @@ export default function ChatPreview({
     try {
       if (onSendMessage) {
         // Use custom message handler if provided
-        const response = await onSendMessage(userMessage, newMessages.slice(0, -1))
+        const response = await onSendMessage(textToSend, newMessages.slice(0, -1))
         if (response) {
           setMessages(prev => [...prev, { 
             role: "assistant", 
@@ -284,7 +302,7 @@ export default function ChatPreview({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            input: userMessage,
+            input: textToSend,
             prompt: directive,
             messages: newMessages.slice(0, -1),
             chatbotId: id,
@@ -316,8 +334,13 @@ export default function ChatPreview({
     }
   }
 
+  const handleSuggestionClick = (suggestion: string) => {
+    handleSendMessage(suggestion);
+  }
+
   const handleRestartChat = () => {
-    setMessages([{ role: "assistant", content: greeting }])
+    setMessages([{ role: "assistant", content: greeting }]);
+    setShowSuggestions(true);
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -449,7 +472,35 @@ export default function ChatPreview({
           </div>
         )}
 
-        {/* Display all messages */}
+        {/* Suggestions Section - Only show when chat is new/restarted */}
+        {showSuggestions && suggestions.length > 0 && messages.length === 1 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="w-4 h-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground font-medium">Quick suggestions</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map((suggestion, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 px-3 whitespace-normal text-left hover:bg-accent hover:text-accent-foreground"
+                  style={{ 
+                    borderRadius: getBorderRadiusValue(),
+                    borderColor: theme === "dark" ? "hsl(var(--border))" : getColorValue(),
+                  }}
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  disabled={isLoading}
+                >
+                  {suggestion}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Display all messages (except first greeting message) */}
         {messages.slice(1).map((msg, index) => (
           <div 
             key={index} 
@@ -468,7 +519,7 @@ export default function ChatPreview({
             <Card 
               className={`p-4 max-w-md ${
                 msg.role === "user" 
-                  ? `text-black bg-primary border-primary` 
+                  ? `text-white bg-primary border-primary` 
                   : theme === "dark" 
                     ? "bg-card text-card-foreground" 
                     : "bg-card"
@@ -548,7 +599,7 @@ export default function ChatPreview({
                 ? "text-muted-foreground hover:text-foreground hover:bg-accent" 
                 : ""
             }`}
-            onClick={handleSendMessage}
+            onClick={() => handleSendMessage()}
             disabled={isLoading || !message.trim() || isLoadingChatbot}
             style={{ borderRadius: getBorderRadiusValue() }}
           >
