@@ -6,14 +6,21 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate": "npx tsx scripts/migrate-embeddings.ts",
+    "migrate:gemini:chatbot": "npx tsx scripts/migrate-to-gemini.ts --chatbot-id",
+    "migrate:gemini:retry": "npx tsx scripts/migrate-to-gemini.ts --retry-only",
+    "migrate:gemini:verify": "npx tsx scripts/migrate-to-gemini.ts --verify-only"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.20",
     "@ai-sdk/togetherai": "^2.0.1",
     "@auth/prisma-adapter": "^2.11.1",
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.2.2",
     "@langchain/community": "^1.1.1",
     "@langchain/core": "^1.1.8",
+    "@langchain/google-genai": "^2.1.15",
     "@next-auth/prisma-adapter": "^1.0.7",
     "@prisma/adapter-mariadb": "^7.2.0",
     "@prisma/adapter-pg": "^7.2.0",

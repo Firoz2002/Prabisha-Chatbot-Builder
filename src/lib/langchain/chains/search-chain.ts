@@ -1,6 +1,6 @@
 // lib/langchain/search-chain.ts
 import { searchSimilar } from '@/lib/langchain/vector-store';
-import { createTogetherAI } from '@ai-sdk/togetherai';
+import { createGoogleGenerativeAI, google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { prisma } from '@/lib/prisma';
 
@@ -24,8 +24,8 @@ export interface SearchChainResult {
   sourceUrls?: Array<{ title: string; url: string }>;
 }
 
-const togetherai = createTogetherAI({
-  apiKey: process.env.TOGETHER_AI_API_KEY ?? '',
+const googleAI = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY ?? '',
 });
 
 // Enhanced query rewriting with multi-angle approach
@@ -94,7 +94,7 @@ ASSISTANT - Output ONLY clean, compact HTML with no extra spacing:`;
 export async function rewriteQuery(userMessage: string): Promise<string[]> {
   try {
     const { text } = await generateText({
-      model: togetherai('meta-llama/Llama-3.3-70B-Instruct-Turbo'),
+      model: googleAI('gemini-3-flash-preview'),
       prompt: QUERY_REWRITE_PROMPT.replace('{question}', userMessage),
       maxOutputTokens: 150,
       temperature: 0.4,
@@ -591,8 +591,9 @@ export async function generateRAGResponse(
 
     console.log(`✅ Mode: ${mode}`);
 
+    // UPDATED: Use Gemini instead of TogetherAI
     const { text } = await generateText({
-      model: togetherai(chatbot.model || 'meta-llama/Llama-3.3-70B-Instruct-Turbo'),
+      model: googleAI('gemini-3-flash-preview'),
       prompt,
       maxOutputTokens: chatbot.max_tokens || 600,
       temperature: chatbot.temperature || 0.7,
@@ -613,7 +614,7 @@ export async function generateRAGResponse(
     console.log('🤖 Response length:', response.length, 'chars');
     console.log('🔗 Source URLs:', sources.length);
 
-    // Count sources used (approximate)
+    // Count sources used
     const sourcesUsed = knowledgeContext 
       ? (knowledgeContext.match(/\[Chunk \d+/g) || []).length 
       : 0;

@@ -1,6 +1,7 @@
 // lib/langchain/vector-store.ts
-import { TogetherAIEmbeddings } from "@langchain/community/embeddings/togetherai";
+import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { prisma } from "@/lib/prisma";
+import { TaskType } from "@google/generative-ai";
 
 // Enable vector extension in your database
 export async function enableVectorExtension() {
@@ -103,15 +104,14 @@ export async function embedAndStore({
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    const embeddings = new TogetherAIEmbeddings({
-      apiKey: process.env.TOGETHER_API_KEY!,
-      model: "togethercomputer/m2-bert-80M-32k-retrieval",
-      maxRetries: 3,
-      timeout: 30000,
+    const embeddings = new GoogleGenerativeAIEmbeddings({
+      taskType: TaskType.RETRIEVAL_DOCUMENT,
+      apiKey: process.env.GEMINI_API_KEY!,
+      model: "models/embedding-001",
     });
 
     const embedding = await embeddings.embedQuery(text);
-    console.log('Generated embedding with length:', embedding.length);
+    console.log('Generated Gemini embedding with length:', embedding.length);
     return embedding;
   } catch (error) {
     console.error('Error generating embedding:', error);

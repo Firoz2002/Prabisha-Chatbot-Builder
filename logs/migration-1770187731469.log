@@ -1,0 +1,4 @@
+[2026-02-04T06:48:51.469Z] LOG: 🚀 Gemini Migration Tool
+[2026-02-04T06:48:51.471Z] LOG: ==================================================
+[2026-02-04T06:48:51.471Z] ERROR: 
+❌ Migration failed: Error: GOOGLE_API_KEY is required for migration
