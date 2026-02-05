@@ -519,10 +519,10 @@ interface ChatHeaderProps {
 
 function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps) {
   return (
-    <div className={`bg-primary text-primary-foreground ${isMobile || isEmbedded ? 'rounded-none' : 'rounded-t-xl'} flex items-stretch overflow-hidden z-10 relative`}>
+    <div className={`max-h-20 bg-primary text-primary-foreground ${isMobile || isEmbedded ? 'rounded-none' : 'rounded-t-xl'} flex items-stretch overflow-hidden z-10 relative`}>
       
       {/* 1. Avatar - No padding, spans full height */}
-      <div className="max-w-20 shrink-0"> 
+      <div className="max-w-20 shrink-0 px-2"> 
         <Image 
           src={chatbot.avatar || "/icons/logo.png"}
           height={64}
@@ -534,7 +534,7 @@ function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps)
       </div>
 
       {/* 2. Text Content - Padding applied here instead of parent */}
-      <div className="flex-grow flex flex-col justify-center px-2 py-3 min-w-0">
+      <div className="grow flex flex-col justify-center py-3 min-w-0">
         <h3 className="font-semibold text-lg truncate leading-tight">
           {chatbot.name || "Property Assistant"}
         </h3>
