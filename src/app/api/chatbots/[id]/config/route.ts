@@ -103,7 +103,6 @@ export async function GET(
       description: chatbot.description,
       greeting: chatbot.greeting,
       suggestions,
-      theme: chatbot.theme,
       icon: chatbot.icon,
       iconShape: chatbot.iconShape,
       iconColor: chatbot.iconColor,
