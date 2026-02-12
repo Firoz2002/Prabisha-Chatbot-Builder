@@ -118,7 +118,7 @@ export default function ChatPreview({
   const avatarBgColor = propAvatarBgColor || chatbot?.avatarBgColor || undefined;
   const color = propColor || iconColor || avatarColor || "blue";
   const borderRadius = propBorderRadius || getBorderRadiusFromBorderType(iconBorder) || "regular";
-  const theme = propTheme || chatbot?.theme || "light";
+  const theme = propTheme || "light";
   const autoOpenChat = propAutoOpenChat ?? chatbot?.popup_onload ?? false;
   const autoGreeting = propAutoGreeting || false;
   
