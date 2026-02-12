@@ -119,8 +119,6 @@ model Chatbot {
   description String?
   suggestions String[]
 
-  theme String?
-
   icon        String?
   iconSize    Int?
   iconColor   String?
@@ -149,6 +147,7 @@ model Chatbot {
   // Each chatbot has only one form and one logic configuration
   form           ChatbotForm?
   logic          ChatbotLogic?
+  theme          ChatbotTheme?
   
   leads          Lead[]
   conversations  Conversation[]
@@ -159,6 +158,61 @@ model Chatbot {
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
+}
+
+enum Position {
+  TopLeft
+  TopRight
+  TopCenter
+  BottomLeft
+  BottomRight
+  BottomCenter
+  LeftCenter
+  RightCenter
+}
+
+enum WidgetIconType {
+  SVG
+  EMOJI
+  IMAGE
+}
+
+model ChatbotTheme {
+  id              String         @id @default(cuid())
+
+  // Matches 'config.iconUrl' - script uses "💬" emoji if null
+  widgetIcon      String?
+  widgetIconType  WidgetIconType @default(EMOJI) 
+  
+  // Script doesn't explicitly use a label on the button, but common for UX
+  widgetText      String?        @default("Chat with us")
+
+  widgetSize      Int            @default(70) 
+  
+  // Matches defaults.buttonColor: '#3b82f6'
+  widgetColor     String?        @default("#3b82f6")
+  
+  widgetShape     ShapeType      @default(ROUND)
+  widgetBorder    BorderType     @default(FLAT)
+  
+  // Matches background: white in createIframe
+  widgetBgColor   String?        @default("#FFFFFF")
+  
+  // Matches defaults.position: 'bottom-right'
+  widgetPosition  Position       @default(BottomRight)
+  
+  // Default spacing
+  widgetPadding   Int            @default(0)
+  widgetMargin    Int            @default(20)
+
+  // Matches defaults.autoOpen: false
+  popup_onload    Boolean        @default(false)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  chatbotId       String         @unique
+  chatbot         Chatbot        @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
 }
 
 model ChatbotForm {

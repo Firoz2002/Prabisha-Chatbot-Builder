@@ -12,7 +12,9 @@ import {
   RefreshCw, 
   Send,
   UserPlus,
-  CheckCircle2
+  CheckCircle2,
+  VolumeX,
+  Volume2
 } from 'lucide-react';
 import { Message } from '@/types/chat';
 import {
@@ -28,6 +30,7 @@ import { useSpeechToText } from '@/hooks/useSpeechToText';
 import { useLeadGeneration } from '@/hooks/useLeadGeneration';
 import { LeadForm } from '@/components/forms/lead-form';
 import { Button } from '@/components/ui/button';
+import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 
 interface ChatbotWidgetProps {
   chatbotId: string;
@@ -544,16 +547,15 @@ function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps)
       </div>
 
       {/* 3. Close Button - Padding applied here to keep it aligned */}
-      <div className="flex items-center pr-4">
-        <button 
-          onClick={onClose}
-          className="p-2 rounded-full hover:bg-white/10 transition-colors"
-          aria-label="Close chat"
-        >
-          <XIcon size={20} />
-        </button>
-      </div>
-      
+      <button 
+        onClick={onClose}
+        className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 z-50 transition-transform hover:scale-110 active:scale-95"
+        aria-label="Close chat"
+      >
+        <div className="bg-[#facc15] text-black rounded-full p-1.5 shadow-lg border-2 border-white flex items-center justify-center">
+          <XIcon size={16} strokeWidth={3} />
+        </div>
+      </button>  
     </div>
   );
 }
@@ -575,6 +577,21 @@ interface ChatMessagesProps {
 
 const sanitizedHTML = (html: string) => DOMPurify.sanitize(html);
 
+interface ChatMessagesProps {
+  messages: Message[];
+  loading: boolean;
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
+  error: string;
+  quickQuestions: string[];
+  onQuickQuestion: (question: string) => void;
+  chatContainerRef: React.RefObject<HTMLDivElement | null>;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  formatTime: (date?: Date) => string;
+  chatbot: any;
+  showLeadForm?: () => void;
+  hasSubmittedLead: boolean;
+}
+
 function ChatMessages({
   messages,
   loading,
@@ -589,9 +606,22 @@ function ChatMessages({
   showLeadForm,
   hasSubmittedLead,
 }: ChatMessagesProps) {
-  
+  // 1. Initialize the TTS hook
+  const { speak, stop, isPlaying } = useTextToSpeech();
+  const [activeSpeakingId, setActiveSpeakingId] = useState<string | null>(null);
+
   const hasUserMessages = messages.filter(m => m.senderType === 'USER').length > 0;
   const hasMultipleMessages = messages.length >= 2;
+
+  const handleSpeak = async (messageId: string, content: string) => {
+    if (activeSpeakingId === messageId && isPlaying) {
+      stop();
+      setActiveSpeakingId(null);
+    } else {
+      setActiveSpeakingId(messageId);
+      await speak(content);
+    }
+  };
 
   // Reusable Chatbot Avatar Component
   const ChatbotAvatar = ({ 
@@ -619,7 +649,6 @@ function ChatMessages({
     </div>
   );
 
-  // Reusable Small Chatbot Avatar (for streaming/thinking states)
   const SmallChatbotAvatar = () => (
     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
       <Image 
@@ -632,99 +661,110 @@ function ChatMessages({
     </div>
   );
 
-  // Reusable Message Bubble Component
+  // Updated Message Bubble with TTS Controls
   const MessageBubble = ({ 
     message, 
     isUser,
+    index,
     showAvatar = true,
     avatarSize = "default" 
   }: {
     message: Message;
     isUser: boolean;
+    index: number;
     showAvatar?: boolean;
     avatarSize?: "small" | "default";
-  }) => (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      {!isUser && showAvatar && (
-        <ChatbotAvatar size={avatarSize} className={avatarSize === "small" ? "w-8" : ""} />
-      )}
-      
-      <div className={isUser ? 'ml-auto' : ''}>
-        <div 
-          className={`
-            rounded-2xl p-4 shadow-sm animate-in fade-in duration-200
-            ${isUser 
-              ? 'bg-primary text-primary-foreground rounded-tr-none' 
-              : 'bg-card border rounded-tl-none'}
-          `}
-        >
+  }) => {
+    const messageId = `msg-${index}`;
+    const isThisMessageSpeaking = activeSpeakingId === messageId && isPlaying;
+
+    return (
+      <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
+        {!isUser && showAvatar && (
+          <ChatbotAvatar size={avatarSize} className={avatarSize === "small" ? "w-8" : ""} />
+        )}
+        
+        <div className={`relative group ${isUser ? 'ml-auto' : ''}`}>
           <div 
             className={`
-              prose prose-sm max-w-none
-              ${isUser ? 'text-primary-foreground' : 'text-foreground'}
+              rounded-2xl p-4 shadow-sm animate-in fade-in duration-200
+              ${isUser 
+                ? 'bg-primary text-primary-foreground rounded-tr-none' 
+                : 'bg-card border rounded-tl-none'}
             `}
-            dangerouslySetInnerHTML={{ 
-              __html: sanitizedHTML(message.content).replace(/<a /g, `<a target="_blank" rel="noopener noreferrer" `)
-            }}
-          />
-          {message.createdAt && (
-            <div className={`text-xs mt-2 ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-              {formatTime(message.createdAt)}
+          >
+            <div 
+              className={`
+                prose prose-sm max-w-none
+                ${isUser ? 'text-primary-foreground' : 'text-foreground'}
+              `}
+              dangerouslySetInnerHTML={{ 
+                __html: sanitizedHTML(message.content).replace(/<a /g, `<a target="_blank" rel="noopener noreferrer" `)
+              }}
+            />
+            
+            <div className="flex items-center justify-between mt-2 gap-4">
+              {message.createdAt && (
+                <div className={`text-xs ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                  {formatTime(message.createdAt)}
+                </div>
+              )}
+
+              {/* TTS Button for Bot Messages */}
+              {!isUser && (
+                <button
+                  onClick={() => handleSpeak(messageId, message.content)}
+                  className={`p-1.5 rounded-full transition-all duration-200 ${
+                    isThisMessageSpeaking 
+                    ? 'bg-primary/20 text-primary scale-110' 
+                    : 'hover:bg-primary/10 text-muted-foreground opacity-0 group-hover:opacity-100'
+                  }`}
+                  title={isThisMessageSpeaking ? "Stop reading" : "Read message"}
+                >
+                  {isThisMessageSpeaking ? (
+                    <VolumeX className="h-3.5 w-3.5" />
+                  ) : (
+                    <Volume2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              )}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const LoadingState = ({ 
+    statusType,
+    text = "Thinking",
+    showSmallAvatar = false,
+  }: {
+    statusType: 'submitted' | 'streaming';
+    text?: string;
+    showSmallAvatar?: boolean;
+  }) => (
+    <div className="flex items-center gap-3 animate-in fade-in">
+      {showSmallAvatar ? <SmallChatbotAvatar /> : <ChatbotAvatar />}
+      <div className="bg-card border rounded-2xl rounded-tl-none p-4">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          {statusType === 'submitted' ? (
+            <div className="flex space-x-1">
+              {[0, 150, 300].map((delay) => (
+                <div key={delay} className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: `${delay}ms` }} />
+              ))}
+              <p className="text-sm ml-1">{text}</p>
+            </div>
+          ) : (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <p className="text-sm">{text}</p>
+            </>
           )}
         </div>
       </div>
     </div>
   );
-
-  // Reusable Loading State Component
-  const LoadingState = ({ 
-    statusType,
-    text = "Thinking",
-    showSmallAvatar = false,
-    customContent 
-  }: {
-    statusType: 'submitted' | 'streaming';
-    text?: string;
-    showSmallAvatar?: boolean;
-    customContent?: React.ReactNode;
-  }) => {
-    const loadingContent = customContent || (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        {statusType === 'submitted' && (
-          <>
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
-            </div>
-            <p className="text-sm">{text}</p>
-          </>
-        )}
-        
-        {statusType === 'streaming' && (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <p className="text-sm">{text}</p>
-            <div className="flex gap-1">
-              <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
-              <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
-              <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
-            </div>
-          </>
-        )}
-      </div>
-    );
-
-    return (
-      <div className="flex items-center gap-3 animate-in fade-in">
-        {showSmallAvatar ? <SmallChatbotAvatar /> : <ChatbotAvatar />}
-        <div className="bg-card border rounded-2xl rounded-tl-none p-4">
-          {loadingContent}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div 
@@ -732,16 +772,15 @@ function ChatMessages({
       className="flex-1 overflow-y-auto bg-linear-to-b from-background to-muted/30 relative"
     >
       <div className="p-4 space-y-6">
-        {/* Render Messages */}
         {messages.map((message, index) => (
           <MessageBubble
             key={index}
+            index={index}
             message={message}
             isUser={message.senderType === 'USER'}
           />
         ))}
         
-        {/* Lead Collection Call-to-Action */}
         {showLeadForm && hasMultipleMessages && !hasSubmittedLead && !loading && (
           <div className="flex justify-center animate-in fade-in zoom-in-95">
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-4 max-w-md w-full">
@@ -751,15 +790,9 @@ function ChatMessages({
                 </div>
                 <div className="flex-1">
                   <h4 className="font-semibold text-sm mb-1">Ready to get started?</h4>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Share your details and we'll help you get the best solution.
-                  </p>
-                  <button
-                    onClick={showLeadForm}
-                    className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Get Started Now
+                  <p className="text-xs text-muted-foreground mb-3">Share your details and we'll help you get the best solution.</p>
+                  <button onClick={showLeadForm} className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium flex items-center justify-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" /> Get Started Now
                   </button>
                 </div>
               </div>
@@ -767,29 +800,13 @@ function ChatMessages({
           </div>
         )}
 
-        {/* Thinking animation while generating */}
-        {loading && status === 'submitted' && (
-          <LoadingState 
-            statusType="submitted" 
-            text="Thinking"
-          />
-        )}
+        {loading && status === 'submitted' && <LoadingState statusType="submitted" text="Thinking" />}
+        {loading && status === 'streaming' && <LoadingState statusType="streaming" text="Searching..." showSmallAvatar />}
         
-        {/* Streaming/searching animation */}
-        {loading && status === 'streaming' && (
-          <LoadingState 
-            statusType="streaming" 
-            text="Searching..."
-            showSmallAvatar={true}
-          />
-        )}
-        
-        {/* Quick Questions */}
         {!hasUserMessages && quickQuestions.length > 0 && (
           <div className="mt-8 animate-in fade-in delay-300">
             <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-              <Zap className="h-3 w-3" />
-              Quick suggestions
+              <Zap className="h-3 w-3" /> Quick suggestions
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {quickQuestions.map((question, index) => (
@@ -797,17 +814,10 @@ function ChatMessages({
                   key={index}
                   onClick={() => onQuickQuestion(question)}
                   disabled={loading}
-                  className={`
-                    group text-left p-3 rounded-xl border transition-all duration-200
-                    hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
-                    bg-card hover:bg-accent hover:border-accent-foreground/20
-                    animate-in fade-in
-                  `}
+                  className="group text-left p-3 rounded-xl border transition-all duration-200 bg-card hover:bg-accent hover:scale-[1.02] active:scale-95 disabled:opacity-50"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <span className="text-sm font-medium text-foreground group-hover:text-primary">
-                    {question}
-                  </span>
+                  <span className="text-sm font-medium text-foreground group-hover:text-primary">{question}</span>
                 </button>
               ))}
             </div>

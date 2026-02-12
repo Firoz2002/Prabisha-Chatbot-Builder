@@ -1,6 +1,6 @@
 // lib/langchain/search-chain.ts
 import { searchSimilar } from '@/lib/langchain/vector-store';
-import { createGoogleGenerativeAI, google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { prisma } from '@/lib/prisma';
 
