@@ -16,6 +16,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Safety check: Ensure the user exists in the local database
+    // This handles cases where the session might have a Central ID that hasn't been synced yet
+    let user = await prisma.user.findUnique({
+      where: { id: session.user.id }
+    });
+
+    if (!user) {
+      console.log(`User ${session.user.id} not found in DB, attempting to sync by email ${session.user.email}`);
+      // Try to find by email and update ID if it exists under old ID
+      const existingUser = await prisma.user.findUnique({
+        where: { email: session.user.email }
+      });
+
+      if (existingUser) {
+        user = await prisma.user.update({
+          where: { email: session.user.email },
+          data: {
+            id: session.user.id,
+            name: session.user.name,
+            image: session.user.image,
+          }
+        });
+      } else {
+        // Create new user if not found at all
+        user = await prisma.user.create({
+          data: {
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.name,
+            image: session.user.image,
+            role: 'USER'
+          }
+        });
+      }
+    }
+
     // Get user's workspaces with owner info
     const workspaceMemberships = await prisma.workspaceMember.findMany({
       where: {
@@ -109,6 +145,38 @@ export async function POST(request: NextRequest) {
     
     if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    // Safety check: Ensure the user exists in the local database
+    const userExists = await prisma.user.findUnique({
+      where: { id: session.user.id }
+    });
+
+    if (!userExists) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: session.user.email! }
+      });
+
+      if (existingUser) {
+        await prisma.user.update({
+          where: { email: session.user.email! },
+          data: {
+            id: session.user.id,
+            name: session.user.name,
+            image: session.user.image,
+          }
+        });
+      } else {
+        await prisma.user.create({
+          data: {
+            id: session.user.id,
+            email: session.user.email!,
+            name: session.user.name,
+            image: session.user.image,
+            role: 'USER'
+          }
+        });
+      }
     }
 
     const json = await request.json();

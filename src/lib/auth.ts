@@ -1,75 +1,113 @@
-// auth.ts
-import bcrypt from 'bcryptjs';
 import { AuthOptions } from 'next-auth';
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import GoogleProvider from 'next-auth/providers/google';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import type { User } from 'next-auth';
-
 import { prisma } from '@/lib/prisma';
 
 export const authOptions: AuthOptions = {
   debug: true,
-  adapter: PrismaAdapter(prisma),
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-    }),
-    CredentialsProvider({
-      name: 'Credentials',
-      credentials: {
-        name: { label: 'Name', type: 'text', placeholder: 'Your name' },
-        email: { label: 'Email', type: 'email', placeholder: 'your@email.com' },
-        password: { label: 'Password', type: 'password' },
+    {
+      id: "central-auth",
+      name: "Central Account",
+      type: "oauth",
+      wellKnown: `${process.env.CENTRAL_AUTH_URL}/oidc/.well-known/openid-configuration`,
+      authorization: { params: { scope: "openid email profile" } },
+      idToken: true,
+      client: {
+        id_token_signed_response_alg: "HS256",
       },
-      async authorize(credentials) {
-        // Handle registration if name is provided
-        if (credentials?.name) {
-          return handleRegistration(credentials);
-        }
-        
-        // Handle login
-        return handleLogin(credentials);
+      checks: ["pkce", "state"],
+      clientId: process.env.CENTRAL_CLIENT_ID,
+      clientSecret: process.env.CENTRAL_CLIENT_SECRET,
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          image: profile.picture,
+          role: profile.role, // Syncing role from Central Service
+        };
       },
-    }),
+    },
   ],
   callbacks: {
+    // src/lib/auth.ts
+    async signIn({ user }) {
+      if (!user.email) return false;
+
+      try {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: user.email }
+        });
+
+        // Map and validate role from SSO
+        let userRole: 'ADMIN' | 'USER' = 'USER';
+        if (user.role) {
+          const roleUpper = (user.role as string).toUpperCase();
+          if (roleUpper === 'ADMIN') userRole = 'ADMIN';
+          else if (roleUpper === 'USER') userRole = 'USER';
+        }
+
+        if (existingUser) {
+          // If IDs don't match, we update the existing record to use the Central ID
+          // onUpdate: Cascade in schema.prisma will handle updating references
+          if (existingUser.id !== user.id) {
+            console.log(`Migrating user ID for ${user.email}: ${existingUser.id} -> ${user.id}`);
+            await prisma.user.update({
+              where: { email: user.email },
+              data: {
+                id: user.id, // Migrate the local ID to the Central ID
+                name: user.name,
+                image: user.image,
+                role: userRole,
+              },
+            });
+          } else {
+            // Update other fields if ID already matches
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                name: user.name,
+                image: user.image,
+                role: userRole,
+              },
+            });
+          }
+        } else {
+          // New user entirely
+          await prisma.user.create({
+            data: {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              image: user.image,
+              role: userRole,
+            },
+          });
+        }
+        return true;
+      } catch (error) {
+        console.error("Error in signIn callback:", error);
+        // Still return true to allow sign in if the user exists but update failed?
+        // Actually, it's safer to return false if we can't sync the user properly
+        // but for better UX we might want to be careful.
+        // For now, let's keep it strict so we catch errors.
+        return false;
+      }
+    },
     async jwt({ token, user, trigger, session }) {
-      // Add user info to token on sign in
       if (user) {
         token.id = user.id;
         token.role = user.role;
       }
-
-      // Update token with latest user data from database
-      if (token.email) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: token.email },
-        });
-
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.name = dbUser.name;
-          token.email = dbUser.email;
-          token.image = dbUser.image;
-          token.role = dbUser.role; // Directly use the enum value
-        }
-      }
-
-      // Handle session update if needed
+      
+      // Update from local DB if necessary for local-only metadata
       if (trigger === "update" && session) {
         token = { ...token, ...session };
       }
-
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.name = token.name as string;
-        session.user.email = token.email as string;
-        session.user.image = token.image as string | null;
         session.user.role = token.role as string;
       }
       return session;
@@ -77,88 +115,10 @@ export const authOptions: AuthOptions = {
   },
   pages: {
     signIn: '/login',
-    signOut: '/logout',
     error: '/auth/error',
   },
   session: {
-    strategy: 'jwt',
+    strategy: 'jwt', // This allows us to remove the Session table
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
-
-// Helper functions with proper typing
-async function handleRegistration(credentials: Record<"name" | "email" | "password", string> | undefined): Promise<User | null> {
-  if (!credentials) throw new Error('No credentials provided');
-  
-  const { name, email, password } = credentials;
-
-  // Validate input
-  if (!name || !email || !password) {
-    throw new Error('All fields are required');
-  }
-
-  // Check if user exists
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (existingUser) {
-    throw new Error('User already exists');
-  }
-
-  // Hash password
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  // Create user with default USER role (since role is now an enum with default value)
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      password: hashedPassword,
-      // role field is automatically set to USER by the @default(USER) in the schema
-    },
-  });
-
-  // Return in NextAuth User format
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    image: user.image,
-    role: user.role, // Include role in the return
-  };
-}
-
-async function handleLogin(credentials: Record<"email" | "password", string> | undefined): Promise<User | null> {
-  if (!credentials) throw new Error('No credentials provided');
-  
-  const { email, password } = credentials;
-  
-  // Find user
-  const user = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (!user) {
-    throw new Error('No user found with this email');
-  }
-
-  if (!user.password) {
-    throw new Error('Account created with social provider. Please sign in with that provider.');
-  }
-
-  // Verify password
-  const isValid = await bcrypt.compare(password, user.password);
-  if (!isValid) {
-    throw new Error('Incorrect password');
-  }
-
-  // Return in NextAuth User format
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    image: user.image,
-    role: user.role, // Include role in the return
-  };
-}

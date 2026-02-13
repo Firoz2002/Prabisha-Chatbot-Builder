@@ -8,6 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import GoogleOneTap from "@/components/features/GoogleOneTap";
+import { SSOProvider } from "@/providers/sso-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -52,16 +53,18 @@ export default function RootLayout({
                       }(window,document,'script','chatbot','http://localhost:3000/embed.js'));
 
                       chatbot('init', {
-  chatbotId: 'cmkky862a000004l1rbz63cn7',
-  baseUrl: 'http://localhost:3000'
-});
+                        chatbotId: 'cmkky862a000004l1rbz63cn7',
+                        baseUrl: 'http://localhost:3000'
+                      });
                     `
                   }}
                 />
             <SessionProvider>
               { process.env.NODE_ENV !== "development" && <GoogleOneTap /> }
               <Toaster richColors position="top-right" closeButton />
-              {children}
+              <SSOProvider>
+                {children}
+              </SSOProvider>
             </SessionProvider>
           </ThemeProvider>
         </Suspense>

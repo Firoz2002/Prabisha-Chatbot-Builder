@@ -4,8 +4,23 @@ import { CheckCircle2, Zap, Brain, ArrowRight, MessageSquare, Settings, Gauge } 
 
 import Header from "@/components/layout/header"
 import Footer from "@/components/layout/footer"
+import { useState } from "react"
+import { signIn } from "next-auth/react"
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCentralLogin = async () => {
+    try {
+      setIsLoading(true)
+      await signIn("central-auth", { callbackUrl: "/dashboard" })
+    } catch (error) {
+      console.error("Central login error:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-background">
       {/* Navigation */}
@@ -37,7 +52,7 @@ export default function Home() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Button size="lg" className="gap-2">
+              <Button disabled={isLoading} onClick={handleCentralLogin} size="lg" className="gap-2">
                 Start Building Free
                 <ArrowRight className="w-4 h-4" />
               </Button>
