@@ -1,6 +1,5 @@
 import { AuthOptions } from 'next-auth';
 import { prisma } from '@/lib/prisma';
-import { signIn } from "next-auth/react";
 
 export const authOptions: AuthOptions = {
   debug: true,
@@ -122,12 +121,4 @@ export const authOptions: AuthOptions = {
     strategy: 'jwt', // This allows us to remove the Session table
   },
   secret: process.env.NEXTAUTH_SECRET,
-};
-
-export const handleLogin = async (callbackUrl = "/dashboard") => {
-  try {
-    await signIn("central-auth", { callbackUrl });
-  } catch (error) {
-    console.error("Central login error:", error);
-  }
 };

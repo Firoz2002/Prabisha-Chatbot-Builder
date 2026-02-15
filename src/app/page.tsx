@@ -5,9 +5,16 @@ import { CheckCircle2, Zap, Brain, ArrowRight, MessageSquare, Settings, Gauge } 
 
 import Header from "@/components/layout/header"
 import Footer from "@/components/layout/footer"
-import { handleLogin } from "@/lib/auth";
+import { signIn } from "next-auth/react";
 
 export default function Home() {
+  const handleLogin = async (callbackUrl = "/dashboard") => {
+    try {
+      await signIn("central-auth", { callbackUrl });
+    } catch (error) {
+      console.error("Central login error:", error);
+    }
+  };
   return (
     <main className="min-h-screen bg-background">
       {/* Navigation */}
