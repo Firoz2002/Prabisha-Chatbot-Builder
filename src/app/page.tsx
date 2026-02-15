@@ -15,6 +15,7 @@ export default function Home() {
       console.error("Central login error:", error);
     }
   };
+  
   return (
     <main className="min-h-screen bg-background">
       {/* Navigation */}

@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "../features/theme-toggle";
+import { signIn } from "next-auth/react";
 
 /* ---------------- TYPES ---------------- */
 
@@ -119,6 +120,14 @@ const ListItem = ({
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [isDesktopExpanded, setIsDesktopExpanded] = useState(false);
+
+  const handleLogin = async (callbackUrl = "/dashboard") => {
+    try {
+      await signIn("central-auth", { callbackUrl });
+    } catch (error) {
+      console.error("Central login error:", error);
+    }
+  };
 
   const menuItems: MenuItem[] = [
     {
@@ -230,11 +239,11 @@ export default function Header() {
           <ThemeToggle />
 
           <div className="hidden lg:flex gap-2">
-            <Button variant="ghost" asChild>
-              <Link href="/login">Login</Link>
+            <Button variant="ghost" asChild onClick={() => handleLogin()}>
+              Login
             </Button>
-            <Button asChild className="rounded-full">
-              <Link href="/register">Get Started</Link>
+            <Button asChild className="rounded-full" onClick={() => handleLogin()}>
+              Get Started
             </Button>
           </div>
 
