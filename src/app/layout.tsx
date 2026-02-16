@@ -8,7 +8,6 @@ import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import GoogleOneTap from "@/components/features/GoogleOneTap";
-import { SSOProvider } from "@/providers/sso-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -62,9 +61,7 @@ export default function RootLayout({
             <SessionProvider>
               { process.env.NODE_ENV !== "development" && <GoogleOneTap /> }
               <Toaster richColors position="top-right" closeButton />
-              <SSOProvider>
                 {children}
-              </SSOProvider>
             </SessionProvider>
           </ThemeProvider>
         </Suspense>
