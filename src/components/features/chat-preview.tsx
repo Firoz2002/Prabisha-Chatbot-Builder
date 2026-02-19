@@ -127,7 +127,7 @@ export default function ChatPreview({
   const autoGreeting = propAutoGreeting || false;
   
   // Get theme colors from theme object (prioritize liveTheme for live updates)
-  const themeColors = liveTheme || propTheme || chatbot?.theme || {};
+  const themeColors = liveTheme || propTheme || (chatbot as any)?.theme || {};
   const headerBgColor = themeColors.headerBgColor || "#1320AA";
   const headerTextColor = themeColors.headerTextColor || "#ffffff";
   const botMessageBgColor = themeColors.botMessageBgColor || "#f1f5f9";
