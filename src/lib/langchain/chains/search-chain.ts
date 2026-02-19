@@ -1,7 +1,7 @@
 // lib/langchain/search-chain.ts
 import { searchSimilar } from '@/lib/langchain/vector-store';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { generateText } from 'ai';
+import { generateText, streamText } from 'ai';
 import { prisma } from '@/lib/prisma';
 
 export interface SearchChainConfig {
@@ -48,7 +48,7 @@ IMPORTANT RULES:
 3. Be specific - mention features, services, pricing, timelines when available
 4. Connect related information across different context sources
 5. Only say "I don't have information" if context is completely irrelevant
-6. Use a helpful, conversational tone - not overly cautious
+6. Use a helpful, conversational tone
 
 CRITICAL FORMATTING RULES - FOLLOW EXACTLY:
 - Wrap each paragraph in <p> tags with NO extra newlines
@@ -57,7 +57,14 @@ CRITICAL FORMATTING RULES - FOLLOW EXACTLY:
 - DO NOT add extra <br> tags or newlines
 - DO NOT add blank lines between elements
 - Keep HTML compact and clean
-- DO NOT mention sources or URLs (they will be added automatically)
+- DO NOT mention sources or URLs
+
+FOLLOW-UP RULE:
+- After your complete answer, ask EXACTLY ONE short follow-up question
+- The question must be relevant to what the user just asked
+- Wrap it in: <p class="follow-up-question">...</p>
+- It must be the LAST element in your response
+- Do NOT ask more than one question
 
 CONTEXT (from knowledge base):
 {context}
@@ -67,7 +74,7 @@ CONVERSATION HISTORY:
 
 USER QUESTION: {question}
 
-Provide a clear, helpful answer. Output ONLY clean, compact HTML with no extra spacing:`;
+Provide a complete answer first, then ONE follow-up question at the end. Output ONLY clean, compact HTML:`;
 
 // Fallback prompt when no knowledge base context found
 const GENERAL_ANSWER_PROMPT = `{systemPrompt}
@@ -770,4 +777,75 @@ export async function simpleSearch(
   allResults.sort((a, b) => (b.score || 0) - (a.score || 0));
 
   return allResults.slice(0, options?.limit || 10);
+}
+
+export async function streamRAGResponse(
+  chatbot: any,
+  userMessage: string,
+  conversationId: string,
+  onChunk?: (chunk: string) => void
+): Promise<ReadableStream<string>> {
+  // Get conversation history
+  const history = await prisma.message.findMany({
+    where: {
+      conversationId,
+      createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) }
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 10
+  });
+
+  const formattedHistory = formatHistory(history);
+  const queries = await rewriteQuery(userMessage);
+  const { context: knowledgeContext, sources } = await searchKnowledgeBases(chatbot, queries);
+  const logicContext = await getLogicContext(chatbot, userMessage);
+
+  const prompt = knowledgeContext
+    ? RAG_ANSWER_PROMPT
+        .replace('{context}', knowledgeContext)
+        .replace('{history}', formattedHistory)
+        .replace('{question}', userMessage)
+    : GENERAL_ANSWER_PROMPT
+        .replace('{systemPrompt}', generateSystemPrompt(chatbot))
+        .replace('{history}', formattedHistory)
+        .replace('{logicContext}', logicContext)
+        .replace('{question}', userMessage);
+
+  const result = await streamText({
+    model: googleAI('gemini-3-flash-preview'),
+    prompt,
+    maxOutputTokens: chatbot.max_tokens || 600,
+    temperature: chatbot.temperature || 0.7,
+  });
+
+  // Collect full response for DB storage
+  let fullText = '';
+
+  const stream = new ReadableStream<string>({
+    async start(controller) {
+      for await (const chunk of result.textStream) {
+        fullText += chunk;
+        controller.enqueue(chunk);
+        onChunk?.(chunk);
+      }
+
+      // Persist the full message after streaming completes
+      const htmlResponse = cleanHtmlResponse(ensureHtmlFormat(fullText));
+      const finalHtml = sources.length > 0
+        ? appendReadMoreSection(htmlResponse, sources)
+        : htmlResponse;
+
+      await prisma.message.create({
+        data: {
+          content: finalHtml,
+          senderType: 'BOT',
+          conversationId
+        }
+      });
+
+      controller.close();
+    }
+  });
+
+  return stream;
 }
