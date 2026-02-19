@@ -42,10 +42,41 @@ interface ChatbotWidgetProps {
 // ====================
 
 const LoadingSpinner = ({ message = "Loading..." }: { message?: string }) => (
-  <div className="flex items-center justify-center h-full min-h-[400px]">
-    <div className="text-center">
-      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-      <p className="text-muted-foreground">{message}</p>
+  <div className="flex flex-col h-full min-h-[400px] bg-background">
+    {/* Header Skeleton */}
+    <div className="max-h-24 rounded-t-xl flex items-stretch p-4 border-b">
+      <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse shrink-0" />
+      <div className="flex-1 ml-3 space-y-2">
+        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+        <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
+      </div>
+    </div>
+
+    {/* Messages Skeleton */}
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex gap-3">
+        <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+      
+      <div className="space-y-2 mt-6">
+        <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+        <div className="flex gap-2">
+          <div className="h-8 w-28 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="h-8 w-32 bg-gray-200 rounded-lg animate-pulse" />
+        </div>
+      </div>
+    </div>
+
+    {/* Input Skeleton */}
+    <div className="border-t p-3">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-12 bg-gray-200 rounded-xl animate-pulse" />
+        <div className="h-12 w-12 bg-gray-200 rounded-xl animate-pulse" />
+      </div>
     </div>
   </div>
 );
@@ -437,8 +468,40 @@ function ChatBot({
     return (
       <ChatContainer isEmbedded={isEmbedded} isMobile={isMobile} isOpen={true}>
         <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-150 rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl relative overflow-hidden`}>
-          <div className="flex-1 flex items-center justify-center">
-            <LoadingSpinner message="Loading chat..." />
+          {/* Header Skeleton */}
+          <div className="max-h-24 rounded-t-xl flex items-stretch p-4 border-b">
+            <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse shrink-0" />
+            <div className="flex-1 ml-3 space-y-2">
+              <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+              <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+
+          {/* Messages Skeleton */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex gap-3">
+              <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+                <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+              </div>
+            </div>
+            
+            <div className="space-y-2 mt-6">
+              <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+              <div className="flex gap-2">
+                <div className="h-8 w-28 bg-gray-200 rounded-lg animate-pulse" />
+                <div className="h-8 w-32 bg-gray-200 rounded-lg animate-pulse" />
+              </div>
+            </div>
+          </div>
+
+          {/* Input Skeleton */}
+          <div className="border-t p-3">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-12 bg-gray-200 rounded-xl animate-pulse" />
+              <div className="h-12 w-12 bg-gray-200 rounded-xl animate-pulse" />
+            </div>
           </div>
         </div>
       </ChatContainer>

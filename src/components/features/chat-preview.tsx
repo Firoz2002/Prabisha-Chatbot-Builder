@@ -430,9 +430,48 @@ export default function ChatPreview({
   // Show loading skeleton while fetching chatbot data
   if (isLoadingChatbot && useDbConfig) {
     return (
-      <div className="h-full max-h-screen flex flex-col items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        <p className="mt-2 text-sm text-muted-foreground">Loading chatbot...</p>
+      <div className="h-full flex flex-col">
+        {/* Header Skeleton */}
+        {showPreviewControls && (
+          <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-28 bg-gray-200 rounded animate-pulse" />
+              <div className="h-9 w-9 bg-gray-200 rounded animate-pulse" />
+              <div className="h-9 w-9 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+        )}
+
+        {/* Chat Area Skeleton */}
+        <div className="flex-1 overflow-y-auto p-6 bg-background space-y-4">
+          {/* Avatar + Message Skeleton */}
+          <div className="flex gap-3">
+            <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+
+          {/* Quick Suggestions Skeleton */}
+          <div className="space-y-3 mt-6">
+            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+            <div className="flex flex-wrap gap-2">
+              <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
+              <div className="h-8 w-40 bg-gray-200 rounded animate-pulse" />
+              <div className="h-8 w-36 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* Input Area Skeleton */}
+        <div className="p-6 border-t bg-background">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-10 bg-gray-200 rounded animate-pulse" />
+            <div className="h-10 w-10 bg-gray-200 rounded animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
