@@ -997,27 +997,6 @@ function ChatInput({
                   <RefreshCw className="h-4 w-4" />
                   <span className="hidden sm:inline">New Chat</span>
                 </PromptInputButton>
-
-                {/* ✅ Mode Toggle Button */}
-                <PromptInputButton
-                  size="sm"
-                  variant="ghost"
-                  onClick={onModeToggle}
-                  title={isStreaming ? "Switch to standard mode" : "Switch to streaming mode"}
-                  className={`text-xs transition-colors ${
-                    isStreaming
-                      ? "text-primary hover:bg-primary/10"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                  disabled={loading}
-                >
-                  {isStreaming ? (
-                    <><Radio className="h-4 w-4" /><span className="hidden sm:inline">Live</span></>
-                  ) : (
-                    <><Gauge className="h-4 w-4" /><span className="hidden sm:inline">Standard</span></>
-                  )}
-                </PromptInputButton>
-
               </PromptInputTools>
             </PromptInputToolbar>
           </div>

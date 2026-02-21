@@ -23,7 +23,6 @@ interface UseChatbotProps {
   initialChatbotData?: ChatbotData;
 }
 
-// ✅ Added 'mode' to the return type
 interface UseChatbotReturn {
   chatbot: ChatbotData | null;
   isLoadingChatbot: boolean;
@@ -49,6 +48,18 @@ interface UseChatbotReturn {
   chatContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
+// Simple timer utility
+function timer(label: string) {
+  const start = performance.now();
+  return {
+    end: () => {
+      const ms = (performance.now() - start).toFixed(1);
+      console.log(`⏱️ [${label}]: ${ms}ms`);
+      return parseFloat(ms);
+    }
+  };
+}
+
 export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): UseChatbotReturn {
   const [chatbot, setChatbot] = useState<ChatbotData | null>(initialChatbotData || null);
   const [isLoadingChatbot, setIsLoadingChatbot] = useState(!initialChatbotData);
@@ -62,15 +73,14 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [hasLoadedInitialMessages, setHasLoadedInitialMessages] = useState<boolean>(false);
   const [quickQuestions, setQuickQuestions] = useState<string[]>([]);
-
-  // ✅ New: mode state — default to 'streaming'
-  const [mode, setMode] = useState<'streaming' | 'standard'>('streaming');
+  const [mode, setMode] = useState<'streaming' | 'standard'>('standard');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const loadConversationMessages = useCallback(async (conversationId: string) => {
+    const t = timer('loadConversationMessages');
     try {
       const response = await fetch(`/api/conversations/${conversationId}`, {
         method: 'GET',
@@ -104,6 +114,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
       setConversationId(null);
       showWelcomeMessage();
     } finally {
+      t.end();
       setHasLoadedInitialMessages(true);
     }
   }, [chatbotId]);
@@ -120,6 +131,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
 
   const fetchChatbotData = useCallback(async () => {
     if (!chatbotId) return;
+    const t = timer('fetchChatbotData');
     setIsLoadingChatbot(true);
     setChatbotError(null);
     try {
@@ -139,6 +151,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
       console.error('Error fetching chatbot:', error);
       setChatbotError(error instanceof Error ? error.message : 'Failed to load chatbot');
     } finally {
+      t.end();
       setIsLoadingChatbot(false);
     }
   }, [chatbotId]);
@@ -178,11 +191,9 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     }
   }, [hasLoadedInitialMessages]);
 
-  // ✅ Streaming path — hits /api/chat/stream
   const handleStreamingSubmit = async (searchQuery: string) => {
-    const placeholderIndex = messages.length + 1; // position after user msg
+    const tTotal = timer('handleStreamingSubmit [total]');
 
-    // Insert a placeholder bot message immediately
     setMessages(prev => [...prev, {
       senderType: 'BOT',
       content: '...',
@@ -190,39 +201,42 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     }]);
 
     try {
+      const tFetch = timer('streaming: fetch /api/chat/stream');
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: searchQuery, conversationId, chatbotId }),
       });
+      tFetch.end();
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || `HTTP error! status: ${response.status}`);
       }
 
-      // Grab conversationId from response header
       const newConversationId = response.headers.get('X-Conversation-Id');
       if (newConversationId && newConversationId !== conversationId) {
         setConversationId(newConversationId);
         localStorage.setItem(`chatbot_${chatbotId}_conversation`, newConversationId);
       }
 
-      // Read the stream and update the placeholder message in-place
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let accumulated = '';
 
       setStatus('streaming');
 
+      const tStream = timer('streaming: reading stream chunks');
+      let chunkCount = 0;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
+        chunkCount++;
         const chunk = decoder.decode(value, { stream: true });
         accumulated += chunk;
 
-        // Replace the last message (the placeholder) with growing content
         setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = {
@@ -233,6 +247,9 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
           return updated;
         });
       }
+
+      const streamMs = tStream.end();
+      console.log(`   └─ chunks received: ${chunkCount}, total chars: ${accumulated.length}`);
 
       setStatus('ready');
       setLoading(false);
@@ -252,24 +269,33 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
       });
       setError(err instanceof Error ? err.message : 'Failed to send message.');
       setTimeout(() => setStatus('ready'), 3000);
+    } finally {
+      tTotal.end();
     }
   };
 
-  // ✅ Standard (non-streaming) path — hits /api/chat
   const handleStandardSubmit = async (searchQuery: string) => {
+    const tTotal = timer('handleStandardSubmit [total]');
+
     try {
+      const tFetch = timer('standard: fetch /api/chat');
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: searchQuery, conversationId, chatbotId }),
       });
+      tFetch.end();
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || `HTTP error! status: ${response.status}`);
       }
 
+      const tParse = timer('standard: parse JSON response');
       const data = await response.json();
+      tParse.end();
+
+      console.log('Chat response:', data);
 
       if (data.conversationId && data.conversationId !== conversationId) {
         setConversationId(data.conversationId);
@@ -299,14 +325,18 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
       }]);
       setError(err instanceof Error ? err.message : 'Failed to send message. Please try again.');
       setTimeout(() => setStatus('ready'), 3000);
+    } finally {
+      tTotal.end();
     }
   };
 
-  // ✅ Unified submit — delegates to streaming or standard based on mode
   const handleSubmit = async (e?: React.FormEvent, overrideText?: string) => {
     if (e) e.preventDefault();
     const searchQuery = (overrideText || text).trim();
     if (!searchQuery) { setError('Please enter a message'); return; }
+
+    console.group(`🚀 handleSubmit [mode=${mode}] — "${searchQuery.substring(0, 40)}..."`);
+    const tSubmit = timer('handleSubmit [total including UI updates]');
 
     setMessages(prev => [...prev, { senderType: 'USER', content: searchQuery, createdAt: new Date() }]);
     setLoading(true);
@@ -320,6 +350,9 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     } else {
       await handleStandardSubmit(searchQuery);
     }
+
+    tSubmit.end();
+    console.groupEnd();
   };
 
   const handleQuickQuestion = async (question: string) => {
@@ -359,8 +392,8 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     conversationId,
     hasLoadedInitialMessages,
     quickQuestions,
-    mode,       // ✅ exposed
-    setMode,    // ✅ exposed
+    mode,
+    setMode,
     handleSubmit,
     handleQuickQuestion,
     handleNewChat,
