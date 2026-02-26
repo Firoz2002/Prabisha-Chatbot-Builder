@@ -351,6 +351,7 @@ function ChatBot({
   const {
     transcript, startListening, stopListening,
     resetTranscript, browserSupportsSpeechRecognition,
+    policyBlocked, policyMessage,
   } = useSpeechToText({ continuous: true, lang: 'en-US' });
   const [isMicrophoneOn, setIsMicrophoneOn] = useState(false);
 
@@ -413,6 +414,8 @@ function ChatBot({
 
   return (
     <div className={positionClass}>
+      {/* show a banner if the microphone is being blocked by the host page */}
+      {policyBlocked && policyMessage && <ErrorBanner error={policyMessage} />}
       {isOpen ? (
         <div
           className={[

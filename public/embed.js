@@ -37,6 +37,13 @@
   async function init(userConfig) {
     if (isInitialized) return;
     
+    // check whether parent document forbids microphone via Permissions-Policy
+    if (typeof document !== 'undefined' && document.featurePolicy) {
+      if (!document.featurePolicy.allowsFeature('microphone')) {
+        console.warn('Parent document Permissions-Policy blocks microphone; the embedded chatbot may not be able to access it.');
+      }
+    }
+
     config = { ...defaults, ...userConfig };
     if (!config.chatbotId) {
       console.error('Chatbot ID is required');
