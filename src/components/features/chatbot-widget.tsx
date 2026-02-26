@@ -354,6 +354,24 @@ function ChatBot({
     policyBlocked, policyMessage,
   } = useSpeechToText({ continuous: true, lang: 'en-US' });
   const [isMicrophoneOn, setIsMicrophoneOn] = useState(false);
+  const [parentPolicyInfo, setParentPolicyInfo] = useState<{
+    blocked: boolean;
+    permission?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const blocked = params.get('parent_policy_blocked');
+      const permission = params.get('parent_permission');
+      if (blocked === 'true' || permission === 'denied') {
+        setParentPolicyInfo({ blocked: blocked === 'true', permission: permission || undefined });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     if (!isEmbedded) return;
@@ -414,7 +432,10 @@ function ChatBot({
 
   return (
     <div className={positionClass}>
-      {/* show a banner if the microphone is being blocked by the host page */}
+      {/* show banners if the parent page blocks microphone or if the widget detected a policy denial */}
+      {parentPolicyInfo && (
+        <ErrorBanner error={`Embedding site blocks microphone (parent permission=${parentPolicyInfo.permission || 'unknown'}). Please allow microphone for the iframe on the host page.`} />
+      )}
       {policyBlocked && policyMessage && <ErrorBanner error={policyMessage} />}
       {isOpen ? (
         <div
