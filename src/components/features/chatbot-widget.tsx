@@ -1,20 +1,21 @@
-// components/chatbot/widget.tsx
 'use client';
 import Image from 'next/image';
 import DOMPurify from 'dompurify';
 import { useEffect, useState } from 'react';
-import { 
-  Loader2, 
+import {
+  Loader2,
   Zap,
   XIcon,
-  MicIcon, 
-  MicOffIcon, 
-  RefreshCw, 
+  MicIcon,
+  MicOffIcon,
+  RefreshCw,
   Send,
   UserPlus,
   CheckCircle2,
   VolumeX,
-  Volume2
+  Volume2,
+  MessageCircle,
+  SmilePlus,
 } from 'lucide-react';
 import { Message } from '@/types/chat';
 import {
@@ -31,52 +32,65 @@ import { useLeadGeneration } from '@/hooks/useLeadGeneration';
 import { LeadForm } from '@/components/forms/lead-form';
 import { Button } from '@/components/ui/button';
 import { useTextToSpeech } from '@/hooks/useTextToSpeech';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { EmojiClickData } from 'emoji-picker-react';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface ChatbotWidgetProps {
   chatbotId: string;
   initialChatbotData?: any;
 }
 
-// ====================
-// Reusable Components
-// ====================
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility
+// ─────────────────────────────────────────────────────────────────────────────
 
-const LoadingSpinner = ({ message = "Loading..." }: { message?: string }) => (
+/** Sanitize LLM HTML and force all links to open in a new tab. */
+const sanitizeHtml = (html: string): string => {
+  const clean = DOMPurify.sanitize(html);
+  return clean.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ');
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared small components
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SkeletonBlock = ({ className }: { className: string }) => (
+  <div className={`bg-gray-200 rounded animate-pulse ${className}`} />
+);
+
+const LoadingSpinner = () => (
   <div className="flex flex-col h-full min-h-[400px] bg-background">
-    {/* Header Skeleton */}
-    <div className="max-h-24 rounded-t-xl flex items-stretch p-4 border-b">
-      <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse shrink-0" />
-      <div className="flex-1 ml-3 space-y-2">
-        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-        <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
+    <div className="flex items-stretch p-4 border-b gap-3">
+      <SkeletonBlock className="w-16 h-16 rounded-full shrink-0" />
+      <div className="flex-1 space-y-2 flex flex-col justify-center">
+        <SkeletonBlock className="h-4 w-32" />
+        <SkeletonBlock className="h-3 w-48" />
       </div>
     </div>
-
-    {/* Messages Skeleton */}
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex-1 p-4 space-y-4">
       <div className="flex gap-3">
-        <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse shrink-0" />
+        <SkeletonBlock className="w-12 h-12 rounded-full shrink-0" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
+          <SkeletonBlock className="h-4 w-3/4" />
+          <SkeletonBlock className="h-4 w-1/2" />
         </div>
       </div>
-      
       <div className="space-y-2 mt-6">
-        <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+        <SkeletonBlock className="h-3 w-24" />
         <div className="flex gap-2">
-          <div className="h-8 w-28 bg-gray-200 rounded-lg animate-pulse" />
-          <div className="h-8 w-32 bg-gray-200 rounded-lg animate-pulse" />
+          <SkeletonBlock className="h-8 w-28 rounded-lg" />
+          <SkeletonBlock className="h-8 w-32 rounded-lg" />
         </div>
       </div>
     </div>
-
-    {/* Input Skeleton */}
-    <div className="border-t p-3">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 h-12 bg-gray-200 rounded-xl animate-pulse" />
-        <div className="h-12 w-12 bg-gray-200 rounded-xl animate-pulse" />
-      </div>
+    <div className="border-t p-3 flex gap-2">
+      <SkeletonBlock className="flex-1 h-12 rounded-xl" />
+      <SkeletonBlock className="h-12 w-12 rounded-xl" />
     </div>
   </div>
 );
@@ -86,41 +100,23 @@ const ErrorDisplay = ({ error, onRetry }: { error: string; onRetry?: () => void 
     <div className="text-center p-4">
       <p className="text-destructive">{error}</p>
       {onRetry && (
-        <Button 
-          onClick={onRetry} 
-          variant="outline" 
-          className="mt-2"
-        >
-          Retry
-        </Button>
+        <Button onClick={onRetry} variant="outline" className="mt-2">Retry</Button>
       )}
     </div>
   </div>
 );
 
-const ChatContainer = ({ 
-  children, 
-  isEmbedded, 
-  isMobile, 
-  isOpen 
-}: { 
-  children: React.ReactNode;
-  isEmbedded: boolean;
-  isMobile: boolean;
-  isOpen: boolean;
-}) => (
-  <div className={`${isEmbedded ? 'w-full h-full' : `fixed ${isMobile ? 'inset-0' : 'bottom-6 right-6'} z-50`} ${isMobile && !isOpen ? 'hidden' : ''}`}>
-    {children}
+const ErrorBanner = ({ error }: { error: string }) => (
+  <div className="mx-4 mb-2 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-lg animate-in slide-in-from-bottom">
+    <p className="text-sm text-destructive flex items-center gap-2">
+      <XIcon className="h-3 w-3 shrink-0" />
+      {error}
+    </p>
   </div>
 );
 
 const LeadFormOverlay = ({
-  activeLeadForm,
-  chatbotId,
-  conversationId,
-  onClose,
-  onSuccess,
-  onSubmitLead,
+  activeLeadForm, chatbotId, conversationId, onClose, onSuccess, onSubmitLead,
 }: {
   activeLeadForm: any;
   chatbotId: string;
@@ -143,25 +139,40 @@ const LeadFormOverlay = ({
   </div>
 );
 
-const ErrorBanner = ({ error }: { error: string }) => (
-  <div className="mx-4 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-lg animate-in slide-in-from-bottom">
-    <p className="text-sm text-destructive flex items-center gap-2">
-      <XIcon className="h-3 w-3" />
-      {error}
-    </p>
-  </div>
-);
+const Picker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
-// ====================
-// Main Chatbot Widget
-// ====================
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatbotWidget — root export
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function ChatbotWidget({ chatbotId, initialChatbotData }: ChatbotWidgetProps) {
   const [isInitialized, setIsInitialized] = useState(false);
-  const [sessionId, setSessionId] = useState<string>('');
   const [liveTheme, setLiveTheme] = useState<any>(null);
 
-  // Use the chatbot hook
+  // ── Lead generation ───────────────────────────────────────────────────────
+  // Determines whether to use modal (EMBEDDED) or chat-based (MESSAGES) mode.
+  const {
+    activeLeadForm,
+    isLeadFormVisible,
+    shouldShowLeadForm,
+    isLoadingLeadConfig,
+    hasSubmittedLead,
+    conversationalLeadConfig,  // non-null when leadFormStyle === 'MESSAGES'
+    isConversationalMode,      // true → collect via chat, false → show modal
+    showLeadForm,
+    hideLeadForm,
+    submitLeadForm,
+    checkLeadRequirements,
+    markLeadAsSubmitted,
+  } = useLeadGeneration({
+    chatbotId,
+    conversationId: null,
+    onLeadCollected: (data) => console.log('Lead collected:', data),
+  });
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+  // Pass conversationalLeadConfig so useChatbot can wire useConversationalLead
+  // internally and intercept user messages during field collection.
   const {
     chatbot,
     isLoadingChatbot,
@@ -175,6 +186,8 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     hasLoadedInitialMessages,
     quickQuestions,
     conversationId,
+    mode,
+    setMode,
     handleSubmit,
     handleQuickQuestion,
     handleNewChat,
@@ -182,108 +195,71 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
     messagesEndRef,
     inputRef,
     chatContainerRef,
+    startLeadCollection,
+    isAwaitingLeadAnswer,
+    leadCollectionStatus,
   } = useChatbot({
     chatbotId,
     initialChatbotData,
-  });
-
-  // Listen for theme updates from parent window
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === 'theme-update') {
-        setLiveTheme(event.data.theme)
-      }
-    }
-
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
-  }, [])
-
-  // Use lead generation hook
-  const {
-    activeLeadForm,
-    isLeadFormVisible,
-    shouldShowLeadForm,
-    isLoadingLeadConfig,
-    leadFormError,
-    hasSubmittedLead,
-    showLeadForm,
-    hideLeadForm,
-    submitLeadForm,
-    checkLeadRequirements,
-    markLeadAsSubmitted,
-  } = useLeadGeneration({
-    chatbotId,
-    conversationId,
-    onLeadCollected: (leadData) => {
-      console.log('Lead collected:', leadData);
+    conversationalLeadConfig: isConversationalMode ? conversationalLeadConfig : null,
+    onLeadCollected: (data) => {
+      console.log('Conversational lead submitted:', data);
+      markLeadAsSubmitted();
     },
   });
 
-  // Initialize chatbot
+  // ── Effects ───────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data.type === 'theme-update') setLiveTheme(e.data.theme);
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
   useEffect(() => {
     if (!chatbotId) return;
-    
-    // Generate session ID for anonymous user
-    const sessionId = localStorage.getItem(`chatbot_session_${chatbotId}`) || 
-                      `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    setSessionId(sessionId);
-    localStorage.setItem(`chatbot_session_${chatbotId}`, sessionId);
-    
+    const sid =
+      localStorage.getItem(`chatbot_session_${chatbotId}`) ||
+      `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem(`chatbot_session_${chatbotId}`, sid);
     setIsInitialized(true);
-    
-    // Notify parent window of widget load
-    window.parent.postMessage({ 
-      type: 'chatbot-loaded',
-      chatbotId: chatbotId 
-    }, '*');
+    window.parent.postMessage({ type: 'chatbot-loaded', chatbotId }, '*');
   }, [chatbotId]);
 
-  // Check lead requirements when messages change
   useEffect(() => {
     if (messages.length > 0 && !hasSubmittedLead && conversationId) {
       checkLeadRequirements();
     }
   }, [messages, hasSubmittedLead, conversationId, checkLeadRequirements]);
 
-  // Show lead form automatically if needed
   useEffect(() => {
-    if (shouldShowLeadForm && activeLeadForm && !isLeadFormVisible && !loading) {
-      setTimeout(() => {
-        showLeadForm();
-      }, 1000);
-    }
-  }, [shouldShowLeadForm, activeLeadForm, isLeadFormVisible, loading, showLeadForm]);
+    if (!shouldShowLeadForm || !activeLeadForm || isLeadFormVisible || loading) return;
+    const timer = setTimeout(() => {
+      if (isConversationalMode) startLeadCollection();
+      else showLeadForm();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    shouldShowLeadForm, activeLeadForm, isLeadFormVisible, loading,
+    isConversationalMode, startLeadCollection, showLeadForm,
+  ]);
 
-  // Loading states
-  if (!isInitialized || isLoadingChatbot) {
-    return <LoadingSpinner message="Loading chatbot..." />;
-  }
+  // ── Guards ────────────────────────────────────────────────────────────────
 
-  if (chatbotError) {
-    return <ErrorDisplay error="Failed to load chatbot" onRetry={() => window.location.reload()} />;
-  }
+  if (!isInitialized || isLoadingChatbot) return <LoadingSpinner />;
+  if (chatbotError) return <ErrorDisplay error="Failed to load chatbot" onRetry={() => window.location.reload()} />;
+  if (!chatbot) return null;
 
-  if (!chatbot) {
-    return null;
-  }
-
-  // Merge live theme with chatbot theme
-  const effectiveChatbot = liveTheme ? {
-    ...chatbot,
-    theme: { ...chatbot.theme, ...liveTheme }
-  } : chatbot;
+  const effectiveChatbot = liveTheme
+    ? { ...chatbot, theme: { ...chatbot.theme, ...liveTheme } }
+    : chatbot;
 
   return (
-    <ChatBot 
-      chatbot={effectiveChatbot} 
-      onClose={() => {
-        window.parent.postMessage({ 
-          type: 'chatbot-close',
-          chatbotId: chatbotId 
-        }, '*');
-      }}
-      // Chat state
+    <ChatBot
+      chatbot={effectiveChatbot}
+      onClose={() => window.parent.postMessage({ type: 'chatbot-close', chatbotId }, '*')}
       text={text}
       setText={setText}
       status={status}
@@ -293,6 +269,8 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
       hasLoadedInitialMessages={hasLoadedInitialMessages}
       quickQuestions={quickQuestions}
       conversationId={conversationId}
+      mode={mode}
+      setMode={setMode}
       handleSubmit={handleSubmit}
       handleQuickQuestion={handleQuickQuestion}
       handleNewChat={handleNewChat}
@@ -300,29 +278,29 @@ export default function ChatbotWidget({ chatbotId, initialChatbotData }: Chatbot
       messagesEndRef={messagesEndRef}
       inputRef={inputRef}
       chatContainerRef={chatContainerRef}
-      // Lead generation state
       activeLeadForm={activeLeadForm}
       isLeadFormVisible={isLeadFormVisible}
-      shouldShowLeadForm={shouldShowLeadForm}
       isLoadingLeadConfig={isLoadingLeadConfig}
-      leadFormError={leadFormError}
       hasSubmittedLead={hasSubmittedLead}
+      isConversationalMode={isConversationalMode}
+      isAwaitingLeadAnswer={isAwaitingLeadAnswer}
+      leadCollectionStatus={leadCollectionStatus}
       showLeadForm={showLeadForm}
       hideLeadForm={hideLeadForm}
       submitLeadForm={submitLeadForm}
+      startLeadCollection={startLeadCollection}
       markLeadAsSubmitted={markLeadAsSubmitted}
     />
   );
 }
 
-// ====================
-// ChatBot Component
-// ====================
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatBot — layout shell
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface ChatBotProps {
   chatbot: any;
   onClose: () => void;
-  // Chat state
   text: string;
   setText: (text: string) => void;
   status: 'submitted' | 'streaming' | 'ready' | 'error';
@@ -332,207 +310,156 @@ interface ChatBotProps {
   hasLoadedInitialMessages: boolean;
   quickQuestions: string[];
   conversationId: string | null;
+  mode: 'streaming' | 'standard';
+  setMode: (mode: 'streaming' | 'standard') => void;
   handleSubmit: (e?: React.FormEvent, overrideText?: string) => Promise<void>;
   handleQuickQuestion: (question: string) => Promise<void>;
   handleNewChat: () => void;
   formatTime: (date?: Date) => string;
-  // Refs
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   chatContainerRef: React.RefObject<HTMLDivElement | null>;
-  // Lead generation
   activeLeadForm: any;
   isLeadFormVisible: boolean;
-  shouldShowLeadForm: boolean;
   isLoadingLeadConfig: boolean;
-  leadFormError: string | null;
   hasSubmittedLead: boolean;
+  isConversationalMode: boolean;
+  isAwaitingLeadAnswer: boolean;
+  leadCollectionStatus: 'idle' | 'collecting' | 'submitting' | 'done' | 'error';
   showLeadForm: () => void;
   hideLeadForm: () => void;
   submitLeadForm: (formData: Record<string, string>) => Promise<boolean>;
+  startLeadCollection: () => void;
   markLeadAsSubmitted: () => void;
 }
 
 function ChatBot({
-  chatbot,
-  onClose,
-  // Chat state
-  text,
-  setText,
-  status,
-  messages,
-  loading,
-  error,
-  hasLoadedInitialMessages,
-  quickQuestions,
-  conversationId,
-  handleSubmit,
-  handleQuickQuestion,
-  handleNewChat,
-  formatTime,
-  // Refs
-  messagesEndRef,
-  inputRef,
-  chatContainerRef,
-  // Lead generation
-  activeLeadForm,
-  isLeadFormVisible,
-  shouldShowLeadForm,
-  isLoadingLeadConfig,
-  leadFormError,
-  hasSubmittedLead,
-  showLeadForm,
-  hideLeadForm,
-  submitLeadForm,
-  markLeadAsSubmitted,
+  chatbot, onClose,
+  text, setText, status, messages, loading, error,
+  hasLoadedInitialMessages, quickQuestions, conversationId, mode, setMode,
+  handleSubmit, handleQuickQuestion, handleNewChat, formatTime,
+  messagesEndRef, inputRef, chatContainerRef,
+  activeLeadForm, isLeadFormVisible, isLoadingLeadConfig, hasSubmittedLead,
+  isConversationalMode, isAwaitingLeadAnswer, leadCollectionStatus,
+  showLeadForm, hideLeadForm, submitLeadForm, startLeadCollection, markLeadAsSubmitted,
 }: ChatBotProps) {
-  const [isOpen, setIsOpen] = useState<boolean>(true);
+  const [isOpen, setIsOpen] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
 
   const {
-    transcript,
-    startListening,
-    stopListening,
-    resetTranscript,
-    browserSupportsSpeechRecognition,
-  } = useSpeechToText({ continuous: true, lang: "en-US" });
-  
+    transcript, startListening, stopListening,
+    resetTranscript, browserSupportsSpeechRecognition,
+    policyBlocked, policyMessage,
+  } = useSpeechToText({ continuous: true, lang: 'en-US' });
   const [isMicrophoneOn, setIsMicrophoneOn] = useState(false);
+  const [parentPolicyInfo, setParentPolicyInfo] = useState<{
+    blocked: boolean;
+    permission?: string;
+  } | null>(null);
 
-  // Add styles to body when embedded to prevent outer scrolling
   useEffect(() => {
-    if (isEmbedded) {
-      document.body.style.overflow = 'hidden';
-      document.body.style.margin = '0';
-      document.body.style.padding = '0';
-      document.body.style.height = '100vh';
-      document.documentElement.style.height = '100vh';
-      document.documentElement.style.overflow = 'hidden';
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const blocked = params.get('parent_policy_blocked');
+      const permission = params.get('parent_permission');
+      if (blocked === 'true' || permission === 'denied') {
+        setParentPolicyInfo({ blocked: blocked === 'true', permission: permission || undefined });
+      }
+    } catch (e) {
+      // ignore
     }
-  }, [isEmbedded]);
-
-  // Check for mobile view
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Update text with transcript from speech recognition
   useEffect(() => {
-    if (transcript) {
-      setText(transcript);
-      resetTranscript();
-    }
+    if (!isEmbedded) return;
+    document.body.style.overflow = 'hidden';
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.body.style.height = '100vh';
+    document.documentElement.style.height = '100vh';
+    document.documentElement.style.overflow = 'hidden';
+  }, [isEmbedded]);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    if (transcript) { setText(transcript); resetTranscript(); }
   }, [transcript, resetTranscript, setText]);
 
-  // Sync microphone state with listening
   useEffect(() => {
-    if (isMicrophoneOn) {
-      startListening();
-    } else {
-      stopListening();
-      resetTranscript();
-    }
+    if (isMicrophoneOn) startListening();
+    else { stopListening(); resetTranscript(); }
   }, [isMicrophoneOn, startListening, stopListening, resetTranscript]);
 
-  const handleToggleMicrophone = () => {
-    if (!browserSupportsSpeechRecognition) return;
-    setIsMicrophoneOn(!isMicrophoneOn);
-  };
-
-  const handleLeadFormSuccess = () => {
-    markLeadAsSubmitted();
-  };
-
   const handleClose = () => {
-    if (isEmbedded) {
-      onClose();
-    } else {
-      setIsClosing(true);
-      setTimeout(() => {
-        setIsOpen(false);
-        setIsClosing(false);
-      }, 300); // Match animation duration
-    }
+    if (isEmbedded) { onClose(); return; }
+    setIsClosing(true);
+    setTimeout(() => { setIsOpen(false); setIsClosing(false); }, 300);
   };
 
-  const handleOpen = () => {
-    setIsOpen(true);
+  const handleLeadAction = () => {
+    if (isConversationalMode) startLeadCollection();
+    else showLeadForm();
   };
+
+  // overflow-hidden on the shell is the outermost x-overflow guard
+  const shellClass = [
+    isMobile || isEmbedded
+      ? 'w-full h-full rounded-none'
+      : 'w-[95vw] sm:w-96 md:w-[480px] h-150 rounded-xl',
+    'bg-background flex flex-col border shadow-2xl relative overflow-hidden',
+  ].join(' ');
+
+  const positionClass = isEmbedded
+    ? 'w-full h-full'
+    : `fixed ${isMobile ? 'inset-0' : 'bottom-6 right-6'} z-50`;
 
   if (!hasLoadedInitialMessages) {
     return (
-      <ChatContainer isEmbedded={isEmbedded} isMobile={isMobile} isOpen={true}>
-        <div className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-150 rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl relative overflow-hidden`}>
-          {/* Header Skeleton */}
-          <div className="max-h-24 rounded-t-xl flex items-stretch p-4 border-b">
-            <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse shrink-0" />
-            <div className="flex-1 ml-3 space-y-2">
-              <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-              <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
-            </div>
-          </div>
-
-          {/* Messages Skeleton */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="flex gap-3">
-              <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse" />
-                <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse" />
-              </div>
-            </div>
-            
-            <div className="space-y-2 mt-6">
-              <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
-              <div className="flex gap-2">
-                <div className="h-8 w-28 bg-gray-200 rounded-lg animate-pulse" />
-                <div className="h-8 w-32 bg-gray-200 rounded-lg animate-pulse" />
-              </div>
-            </div>
-          </div>
-
-          {/* Input Skeleton */}
-          <div className="border-t p-3">
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-12 bg-gray-200 rounded-xl animate-pulse" />
-              <div className="h-12 w-12 bg-gray-200 rounded-xl animate-pulse" />
-            </div>
-          </div>
-        </div>
-      </ChatContainer>
+      <div className={positionClass}>
+        <div className={shellClass}><LoadingSpinner /></div>
+      </div>
     );
   }
 
   return (
-    <ChatContainer isEmbedded={isEmbedded} isMobile={isMobile} isOpen={isOpen}>
+    <div className={positionClass}>
+      {/* show banners if the parent page blocks microphone or if the widget detected a policy denial */}
+      {parentPolicyInfo && (
+        <ErrorBanner error={`Embedding site blocks microphone (parent permission=${parentPolicyInfo.permission || 'unknown'}). Please allow microphone for the iframe on the host page.`} />
+      )}
+      {policyBlocked && policyMessage && <ErrorBanner error={policyMessage} />}
       {isOpen ? (
-        <div 
-          className={`${isMobile || isEmbedded ? 'w-full h-full rounded-none' : 'w-[95vw] sm:w-96 md:w-[480px] h-150 rounded-xl bottom-6 right-6'} bg-background flex flex-col border shadow-2xl relative overflow-hidden transition-all duration-300 ease-out ${
-            isClosing 
-              ? 'animate-out slide-out-to-bottom-full' 
-              : 'animate-in slide-in-from-bottom-full'
-          }`}
+        <div
+          className={[
+            shellClass,
+            'transition-all duration-300 ease-out',
+            isClosing ? 'animate-out slide-out-to-bottom-full' : 'animate-in slide-in-from-bottom-full',
+          ].join(' ')}
         >
-          <ChatHeader 
-            onClose={handleClose} 
+          <ChatHeader
+            onClose={handleClose}
             chatbot={chatbot}
             isMobile={isMobile}
             isEmbedded={isEmbedded}
           />
 
-          {/* Lead Form Overlay */}
-          {isLeadFormVisible && activeLeadForm && (
-            <LeadFormOverlay 
+          {/* Modal overlay — EMBEDDED mode only */}
+          {isLeadFormVisible && activeLeadForm && !isConversationalMode && (
+            <LeadFormOverlay
               activeLeadForm={activeLeadForm}
               chatbotId={chatbot.id}
               conversationId={conversationId || ''}
               onClose={hideLeadForm}
-              onSuccess={handleLeadFormSuccess}
+              onSuccess={markLeadAsSubmitted}
               onSubmitLead={submitLeadForm}
             />
           )}
@@ -541,342 +468,303 @@ function ChatBot({
             messages={messages}
             loading={loading}
             status={status}
-            error={error}
             quickQuestions={quickQuestions}
             onQuickQuestion={handleQuickQuestion}
             chatContainerRef={chatContainerRef}
             messagesEndRef={messagesEndRef}
             formatTime={formatTime}
             chatbot={chatbot}
-            showLeadForm={!hasSubmittedLead && activeLeadForm ? showLeadForm : undefined}
             hasSubmittedLead={hasSubmittedLead}
+            isConversationalMode={isConversationalMode}
+            leadCollectionStatus={leadCollectionStatus}
+            onLeadAction={!hasSubmittedLead && activeLeadForm ? handleLeadAction : undefined}
           />
-            
-            {error && <ErrorBanner error={error} />}
 
-            <ChatInput
-              text={text}
-              setText={setText}
-              loading={loading}
-              isMicrophoneOn={isMicrophoneOn}
-              browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
-              onSubmit={handleSubmit}
-              onNewChat={handleNewChat}
-              status={status}
-              inputRef={inputRef}
-              onToggleMicrophone={handleToggleMicrophone}
-              hasLeadForm={!hasSubmittedLead && !!activeLeadForm}
-              onShowLeadForm={showLeadForm}
-              isLoadingLeadConfig={isLoadingLeadConfig}
-              chatbot={chatbot}
-            />
-        </div>
-      ) : (
-        !isEmbedded && (
-          <ChatToggleButton 
-            onClick={handleOpen} 
-            isMobile={isMobile} 
+          {error && <ErrorBanner error={error} />}
+
+          <ChatInput
+            text={text}
+            setText={setText}
+            loading={loading}
+            isMicrophoneOn={isMicrophoneOn}
+            browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
+            onSubmit={handleSubmit}
+            onNewChat={handleNewChat}
+            status={status}
+            inputRef={inputRef}
+            onToggleMicrophone={() => {
+              if (browserSupportsSpeechRecognition) setIsMicrophoneOn(p => !p);
+            }}
+            hasLeadForm={!hasSubmittedLead && !!activeLeadForm}
+            onLeadAction={handleLeadAction}
+            isLoadingLeadConfig={isLoadingLeadConfig}
+            isAwaitingLeadAnswer={isAwaitingLeadAnswer}
+            isConversationalMode={isConversationalMode}
             chatbot={chatbot}
           />
+
+          <div className="flex items-center justify-end gap-1.5 p-1 mr-4">
+            <span className="text-xs font-medium tracking-wide text-gray-400 lowercase">
+              Powered by
+            </span>
+            <Link target="_blank" rel="noopener noreferrer" href='https://prabisha.com/' className="cursor-pointer text-sm font-bold text-[#1320AA] hover:text-[#1320AA] transition-colors">
+              Prabisha
+            </Link>
+          </div>
+        </div>
+      ) : (
+        !isEmbedded && !isMobile && (
+          <ChatToggleButton onClick={() => setIsOpen(true)} chatbot={chatbot} />
         )
       )}
-    </ChatContainer>
-  );
-}
-
-// ====================
-// Sub-Components
-// ====================
-
-interface ChatToggleButtonProps {
-  onClick: () => void;
-  isMobile: boolean;
-  chatbot: any;
-}
-
-function ChatToggleButton({ onClick, isMobile, chatbot }: ChatToggleButtonProps) {
-  if (isMobile) return null;
-  
-  const widgetSize = chatbot.theme?.widgetSize || 70;
-  const widgetSizeMobile = chatbot.theme?.widgetSizeMobile || 60;
-  const widgetColor = chatbot.theme?.widgetColor || "#3b82f6";
-  const widgetBgColor = chatbot.theme?.widgetBgColor || "#FFFFFF";
-  
-  // Use mobile size on small screens
-  const [isMobileScreen, setIsMobileScreen] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => setIsMobileScreen(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-  
-  const effectiveSize = isMobileScreen ? widgetSizeMobile : widgetSize;
-  
-  return (
-    <button
-      onClick={onClick}
-      className="fixed bottom-6 right-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 group animate-bounce-slow cursor-pointer"
-      aria-label="Open chatbot"
-      style={{
-        width: `${effectiveSize}px`,
-        height: `${effectiveSize}px`,
-        backgroundColor: widgetBgColor,
-        border: `3px solid ${widgetColor}`,
-      }}
-    >
-      <div className="relative w-full h-full">
-        <Image
-          src={chatbot.avatar || chatbot.icon || "/character1.png"}
-          height={effectiveSize}
-          width={effectiveSize}
-          alt={chatbot.name || "Chat Assistant"}
-          className="rounded-full w-full h-full object-contain"
-        />
-      </div>
-      <div className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs px-2 py-1 rounded-full font-bold animate-pulse">
-        Chat
-      </div>
-    </button>
-  );
-}
-
-interface ChatHeaderProps {
-  onClose: () => void;
-  chatbot: any;
-  isMobile?: boolean;
-  isEmbedded?: boolean;
-}
-
-function ChatHeader({ onClose, chatbot, isMobile, isEmbedded }: ChatHeaderProps) {
-  const theme = chatbot.theme;
-  const headerBg = theme?.headerBgColor || "#1320AA";
-  const headerText = theme?.headerTextColor || "#ffffff";
-  const closeBtnBg = theme?.closeButtonBgColor || "#DD692E";
-  const closeBtnColor = theme?.closeButtonColor || "#ffffff";
-
-  return (
-    <div 
-      className={`max-h-24 ${isMobile || isEmbedded ? 'rounded-none' : 'rounded-t-xl'} flex items-stretch overflow-visible z-10 relative`}
-      style={{ backgroundColor: headerBg, color: headerText }}
-    >
-      
-      {/* 1. Avatar - With padding */}
-      <div className="max-w-20 shrink-0 p-3"> 
-        <Image 
-          src={chatbot.avatar || "/icons/logo.png"}
-          height={64}
-          width={64}
-          alt={chatbot.name || "Assistant"}
-          className="h-full w-full object-contain" 
-          unoptimized 
-        />
-      </div>
-
-      {/* 2. Text Content - Padding applied here instead of parent */}
-      <div className="grow flex flex-col justify-center py-4 pr-12 min-w-0">
-        <h3 className="font-semibold text-base truncate leading-tight">
-          {chatbot.name || "Property Assistant"}
-        </h3>
-        <p className="text-[11px] opacity-90 truncate">
-          {chatbot.description || "I am here to help you."}
-        </p>
-      </div>
-
-      {/* 3. Close Button - Inside header, top-right corner */}
-      <button 
-        onClick={onClose}
-        className="absolute top-3 right-3 z-50 transition-transform hover:scale-110 active:scale-95 cursor-pointer"
-        aria-label="Close chat"
-      >
-        <div 
-          className="rounded-full p-1.5 shadow-lg border-2 border-white flex items-center justify-center w-7 h-7"
-          style={{ backgroundColor: closeBtnBg, color: closeBtnColor }}
-        >
-          <XIcon size={14} strokeWidth={3} />
-        </div>
-      </button>  
     </div>
   );
 }
 
-interface ChatMessagesProps {
-  messages: Message[];
-  loading: boolean;
-  status: 'submitted' | 'streaming' | 'ready' | 'error';
-  error: string;
-  quickQuestions: string[];
-  onQuickQuestion: (question: string) => void;
-  chatContainerRef: React.RefObject<HTMLDivElement | null>;
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-  formatTime: (date?: Date) => string;
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatHeader
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ChatHeader({
+  onClose, chatbot, isMobile, isEmbedded,
+}: {
+  onClose: () => void;
   chatbot: any;
-  showLeadForm?: () => void;
-  hasSubmittedLead: boolean;
+  isMobile?: boolean;
+  isEmbedded?: boolean;
+}) {
+  const t = chatbot.theme;
+  return (
+    <div
+      className={[
+        'flex items-center justify-between px-4 py-4 shadow-md backdrop-blur-md',
+        isMobile || isEmbedded ? 'rounded-none' : 'rounded-t-xl',
+      ].join(' ')}
+      style={{
+        background: `linear-gradient(135deg, ${t?.headerBgColor || '#1320AA'}, #1e40af)`,
+        color: t?.headerTextColor || '#ffffff',
+      }}
+    >
+
+      <div className="max-w-20 shrink-0 p-3">
+        <Image
+          src={chatbot.avatar || '/icons/logo.png'}
+          height={64} width={64}
+          alt={chatbot.name || 'Assistant'}
+          className="h-12 w-12 rounded-full object-cover border border-gray-200 shadow-sm"
+          unoptimized
+        />
+      </div>
+      <div className="grow flex flex-col justify-center py-4 pr-12 min-w-0">
+
+        {/* Name + Live Indicator */}
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-base truncate leading-tight tracking-tight">
+            {chatbot.name || 'Assistant'}
+          </h3>
+
+          {/* Live Online Dot */}
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+          </span>
+        </div>
+
+        {/* Subtitle */}
+        <p className="text-[11px] opacity-90 truncate mt-0.5 text-white/90">
+          {chatbot.description || 'Online • Typically replies instantly'}
+        </p>
+
+      </div>
+      <button
+        onClick={onClose}
+        className="absolute top-3 right-3 z-50 transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+        aria-label="Close chat"
+      >
+        <div
+          className="rounded-full p-1.5 shadow-lg border-2 border-white flex items-center justify-center w-7 h-7"
+          style={{
+            backgroundColor: t?.closeButtonBgColor || '#DD692E',
+            color: t?.closeButtonColor || '#ffffff',
+          }}
+        >
+          <XIcon size={14} strokeWidth={3} />
+        </div>
+      </button>
+    </div>
+  );
 }
 
-const sanitizedHTML = (html: string) => DOMPurify.sanitize(html);
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatToggleButton
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ChatToggleButton({ onClick, chatbot }: { onClick: () => void; chatbot: any }) {
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobileScreen(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  const size = isMobileScreen
+    ? (chatbot.theme?.widgetSizeMobile || 60)
+    : (chatbot.theme?.widgetSize || 70);
+
+  return (
+    <button
+      onClick={onClick}
+      className="fixed bottom-6 right-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer"
+      aria-label="Open chatbot"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        backgroundColor: chatbot.theme?.widgetBgColor || '#FFFFFF',
+        border: `3px solid ${chatbot.theme?.widgetColor || '#3b82f6'}`,
+      }}
+    >
+      <Image
+        src={chatbot.avatar || chatbot.icon || '/character1.png'}
+        height={size} width={size}
+        alt={chatbot.name || 'Chat'}
+        className="rounded-full w-full h-full object-contain"
+      />
+      {/* <div className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs px-2 py-1 rounded-full font-bold animate-pulse">
+        Chat
+      </div> */}
+      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-500 border-2 border-white" />
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatMessages
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface ChatMessagesProps {
   messages: Message[];
   loading: boolean;
   status: 'submitted' | 'streaming' | 'ready' | 'error';
-  error: string;
   quickQuestions: string[];
-  onQuickQuestion: (question: string) => void;
+  onQuickQuestion: (q: string) => void;
   chatContainerRef: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   formatTime: (date?: Date) => string;
   chatbot: any;
-  showLeadForm?: () => void;
   hasSubmittedLead: boolean;
+  isConversationalMode: boolean;
+  leadCollectionStatus: 'idle' | 'collecting' | 'submitting' | 'done' | 'error';
+  onLeadAction?: () => void;
 }
 
 function ChatMessages({
-  messages,
-  loading,
-  status,
-  error,
-  quickQuestions,
-  onQuickQuestion,
-  chatContainerRef,
-  messagesEndRef,
-  formatTime,
-  chatbot,
-  showLeadForm,
-  hasSubmittedLead,
+  messages, loading, status, quickQuestions, onQuickQuestion,
+  chatContainerRef, messagesEndRef, formatTime, chatbot,
+  hasSubmittedLead, isConversationalMode, leadCollectionStatus, onLeadAction,
 }: ChatMessagesProps) {
-  // 1. Initialize the TTS hook
   const { speak, stop, isPlaying } = useTextToSpeech();
   const [activeSpeakingId, setActiveSpeakingId] = useState<string | null>(null);
 
-  const theme = chatbot.theme;
-  const botBgColor = theme?.botMessageBgColor || "#f1f5f9";
-  const botTextColor = theme?.botMessageTextColor || "#0f172a";
-  const userBgColor = theme?.userMessageBgColor || "#1320AA";
-  const userTextColor = theme?.userMessageTextColor || "#ffffff";
-  const quickSuggestionBg = theme?.quickSuggestionBgColor || "#ffffff";
-  const quickSuggestionText = theme?.quickSuggestionTextColor || "#0f172a";
+  const t = chatbot.theme;
+  const botBg = t?.botMessageBgColor || '#f1f5f9';
+  const botText = t?.botMessageTextColor || '#0f172a';
+  const userBg = t?.userMessageBgColor || '#1320AA';
+  const userText = t?.userMessageTextColor || '#ffffff';
+  const suggBg = t?.quickSuggestionBgColor || '#ffffff';
+  const suggText = t?.quickSuggestionTextColor || '#0f172a';
+  const accentColor = t?.inputButtonColor || '#DD692E';
 
-  const hasUserMessages = messages.filter(m => m.senderType === 'USER').length > 0;
+  const hasUserMessages = messages.some(m => m.senderType === 'USER');
   const hasMultipleMessages = messages.length >= 2;
 
-  const handleSpeak = async (messageId: string, content: string) => {
-    if (activeSpeakingId === messageId && isPlaying) {
-      stop();
-      setActiveSpeakingId(null);
-    } else {
-      setActiveSpeakingId(messageId);
-      await speak(content);
-    }
+  const handleSpeak = async (id: string, content: string) => {
+    if (activeSpeakingId === id && isPlaying) { stop(); setActiveSpeakingId(null); }
+    else { setActiveSpeakingId(id); await speak(content); }
   };
 
-  // Reusable Chatbot Avatar Component
-  const ChatbotAvatar = ({ 
-    size = "default", 
-    showName = true,
-    className = "" 
-  }: {
-    size?: "small" | "default";
-    showName?: boolean;
-    className?: string;
-  }) => (
-    <div className={`shrink-0 flex flex-col items-center ${size === "default" ? "w-12.5" : ""} ${className}`}>
-      <Image 
-        src={chatbot.icon || "/icons/logo1.png"} 
-        height={size === "default" ? 50 : 32}
-        width={size === "default" ? 50 : 32}
-        alt={chatbot.name || "Assistant"} 
-        className={`${size === "default" ? 'p-1' : 'p-0.5'} rounded-full bg-primary/10 flex items-center justify-center`}
+  // ── Avatar ────────────────────────────────────────────────────────────────
+
+  const ChatbotAvatar = ({ small = false }: { small?: boolean }) => (
+    <div className={`shrink-0 flex flex-col items-center ${small ? '' : 'w-12'}`}>
+      <Image
+        src={chatbot.icon || '/icons/logo1.png'}
+        height={small ? 32 : 50}
+        width={small ? 32 : 50}
+        alt={chatbot.name || 'Assistant'}
+        className={`${small ? 'p-0.5' : 'p-1'} rounded-full bg-primary/10`}
       />
-      {showName && size === "default" && (
+      {!small && (
         <span className="text-[10px] text-center break-words w-full leading-tight mt-1">
-          {chatbot.name || "Assistant"}
+          {chatbot.name || 'Assistant'}
         </span>
       )}
     </div>
   );
 
-  const SmallChatbotAvatar = () => (
-    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-      <Image 
-        src={chatbot.avatar || chatbot.icon || "/character1.png"} 
-        height={16} 
-        width={16} 
-        alt={chatbot.name || "Assistant"} 
-        className="rounded-full"
-      />
-    </div>
-  );
+  // ── Message bubble ────────────────────────────────────────────────────────
 
-  // Updated Message Bubble with TTS Controls
-  const MessageBubble = ({ 
-    message, 
-    isUser,
-    index,
-    showAvatar = true,
-    avatarSize = "default" 
-  }: {
-    message: Message;
-    isUser: boolean;
-    index: number;
-    showAvatar?: boolean;
-    avatarSize?: "small" | "default";
-  }) => {
-    const messageId = `msg-${index}`;
-    const isThisMessageSpeaking = activeSpeakingId === messageId && isPlaying;
+  const MessageBubble = ({
+    message, isUser, index,
+  }: { message: Message; isUser: boolean; index: number }) => {
+    const id = `msg-${index}`;
+    const isSpeaking = activeSpeakingId === id && isPlaying;
 
     return (
       <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-        {!isUser && showAvatar && (
-          <ChatbotAvatar size={avatarSize} className={avatarSize === "small" ? "w-8" : ""} />
-        )}
-        
-        <div className={`relative group ${isUser ? 'ml-auto' : ''}`}>
-          <div 
-            className={`
-              rounded-2xl p-4 shadow-sm animate-in fade-in duration-200
-              ${isUser 
-                ? 'rounded-tr-none' 
-                : 'border rounded-tl-none'}
-            `}
+        {!isUser && <ChatbotAvatar />}
+
+        {/*
+          min-w-0 lets the flex child shrink below its content width.
+          max-w-[85%] caps the bubble so it never touches the edge.
+        */}
+        <div className={`relative group min-w-0 ${isUser ? 'ml-auto max-w-[85%]' : 'max-w-[85%]'}`}>
+          <div
+            className={[
+              'rounded-2xl px-5 py-3.5 text-[14.5px] leading-relaxed',
+              'transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]',
+              isUser
+                ? 'bg-black text-white rounded-tr-md shadow-[0_4px_16px_rgba(0,0,0,0.15)]'
+                : 'bg-white border border-black/5 rounded-tl-md shadow-[0_4px_16px_rgba(0,0,0,0.05)]',
+            ].join(' ')}
             style={{
-              backgroundColor: isUser ? userBgColor : botBgColor,
-              color: isUser ? userTextColor : botTextColor,
+              backgroundColor: isUser ? userBg : botBg,
+              color: isUser ? userText : botText,
             }}
           >
-            <div 
-              className="prose prose-sm max-w-none text-[13px]"
-              style={{ color: isUser ? userTextColor : botTextColor }}
-              dangerouslySetInnerHTML={{ 
-                __html: sanitizedHTML(message.content).replace(/<a /g, `<a target="_blank" rel="noopener noreferrer" `)
-              }}
+            {/*
+              Overflow guards for LLM HTML (source cards, flex rows, URLs, tables):
+              - overflow-hidden + min-w-0         keep content inside the bubble
+              - [&_*]:max-w-full                  every child respects parent width
+              - [&_pre]:whitespace-pre-wrap        code blocks wrap
+              - [&_a]:break-words                 long URLs wrap
+              - [&_table]:overflow-x-auto         tables scroll horizontally
+              - [&_div]:box-border               inline divs count padding in width
+            */}
+            <div
+              className="prose prose-sm max-w-none text-[13px] overflow-hidden min-w-0 [&_*]:max-w-full [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_a]:break-words [&_img]:h-auto [&_img]:block [&_table]:block [&_table]:overflow-x-auto [&_div]:box-border"
+              style={{ color: isUser ? userText : botText }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(message.content) }}
             />
-            
+
             <div className="flex items-center justify-between mt-2 gap-4">
               {message.createdAt && (
-                <div className="text-[10px] opacity-70">
-                  {formatTime(message.createdAt)}
-                </div>
+                <div className="text-[10px] opacity-70">{formatTime(message.createdAt)}</div>
               )}
-
-              {/* TTS Button for Bot Messages */}
               {!isUser && (
                 <button
-                  onClick={() => handleSpeak(messageId, message.content)}
-                  className={`p-1.5 rounded-full transition-all duration-200 ${
-                    isThisMessageSpeaking 
-                    ? 'bg-primary/20 text-primary scale-110' 
-                    : 'hover:bg-primary/10 text-muted-foreground opacity-0 group-hover:opacity-100'
-                  }`}
-                  title={isThisMessageSpeaking ? "Stop reading" : "Read message"}
+                  onClick={() => handleSpeak(id, message.content)}
+                  className={[
+                    'p-1.5 rounded-full transition-all duration-200',
+                    isSpeaking
+                      ? 'bg-primary/20 text-primary scale-110'
+                      : 'hover:bg-primary/10 text-muted-foreground opacity-0 group-hover:opacity-100',
+                  ].join(' ')}
+                  title={isSpeaking ? 'Stop reading' : 'Read aloud'}
                 >
-                  {isThisMessageSpeaking ? (
-                    <VolumeX className="h-3.5 w-3.5" />
-                  ) : (
-                    <Volume2 className="h-3.5 w-3.5" />
-                  )}
+                  {isSpeaking
+                    ? <VolumeX className="h-3.5 w-3.5" />
+                    : <Volume2 className="h-3.5 w-3.5" />}
                 </button>
               )}
             </div>
@@ -886,58 +774,96 @@ function ChatMessages({
     );
   };
 
-  const LoadingState = ({ 
-    statusType,
-    text = "Thinking",
-    showSmallAvatar = false,
-  }: {
-    statusType: 'submitted' | 'streaming';
-    text?: string;
-    showSmallAvatar?: boolean;
-  }) => (
+  // ── Loading indicator ─────────────────────────────────────────────────────
+
+  const LoadingDots = ({ text: label, small }: { text: string; small?: boolean }) => (
     <div className="flex items-center gap-3 animate-in fade-in">
-      {showSmallAvatar ? <SmallChatbotAvatar /> : <ChatbotAvatar />}
+      <ChatbotAvatar small={small} />
       <div className="bg-card border rounded-2xl rounded-tl-none p-4">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          {statusType === 'submitted' ? (
-            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          {small ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <p className="text-sm font-medium">{label}</p>
+            </>
+          ) : (
+            <>
               <div className="flex space-x-1.5">
-                {[0, 150, 300].map((delay, i) => (
-                  <div 
-                    key={delay} 
-                    className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-primary/80 to-primary animate-bounce" 
-                    style={{ 
-                      animationDelay: `${delay}ms`,
-                      animationDuration: '1s',
-                      animationIterationCount: 'infinite'
-                    }} 
+                {[0, 150, 300].map(delay => (
+                  <div
+                    key={delay}
+                    className="w-2.5 h-2.5 rounded-full bg-primary animate-bounce"
+                    style={{ animationDelay: `${delay}ms`, animationDuration: '1s' }}
                   />
                 ))}
               </div>
-              <p className="text-sm font-medium bg-gradient-to-r from-primary/80 to-primary bg-clip-text text-transparent animate-pulse">{text}</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <div className="absolute inset-0 h-4 w-4 animate-ping opacity-20">
-                  <Loader2 className="h-4 w-4 text-primary" />
-                </div>
-              </div>
-              <p className="text-sm font-medium">{text}</p>
-            </div>
+              <p className="text-sm font-medium bg-gradient-to-r from-primary/80 to-primary bg-clip-text text-transparent animate-pulse">
+                {label}
+              </p>
+            </>
           )}
         </div>
       </div>
     </div>
   );
 
+  // ── Lead nudge card ───────────────────────────────────────────────────────
+
+  const LeadCard = () => {
+    const isCollecting = leadCollectionStatus === 'collecting' || leadCollectionStatus === 'submitting';
+    if (leadCollectionStatus === 'done' || hasSubmittedLead) return null;
+
+    return (
+      <div className="flex justify-center animate-in fade-in zoom-in-95">
+        <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-4 w-full">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              {isConversationalMode
+                ? <MessageCircle className="h-5 w-5 text-primary" />
+                : <UserPlus className="h-5 w-5 text-primary" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-semibold text-sm mb-1">
+                {isCollecting ? 'Collecting your details…' : 'Ready to get started?'}
+              </h4>
+              <p className="text-xs text-muted-foreground mb-3">
+                {isConversationalMode
+                  ? isCollecting
+                    ? 'Please answer the questions in the chat above.'
+                    : "I'll ask you a few quick questions right here in the chat."
+                  : "Share your details and we'll help you get the best solution."}
+              </p>
+              {!isCollecting && (
+                <button
+                  onClick={onLeadAction}
+                  className="w-full py-2 px-4 rounded-lg hover:opacity-90 transition-opacity text-sm font-medium flex items-center justify-center gap-2 cursor-pointer"
+                  style={{ backgroundColor: accentColor, color: '#ffffff' }}
+                >
+                  {isConversationalMode
+                    ? <><MessageCircle className="h-4 w-4" /> Start Chat Form</>
+                    : <><CheckCircle2 className="h-4 w-4" /> Get Started Now</>}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <div 
+    /*
+      overflow-x-hidden on the scroll container is the final safety net.
+      Nothing can widen the list even if something escapes a bubble.
+    */
+    <div
       ref={chatContainerRef}
-      className="flex-1 overflow-y-auto bg-linear-to-b from-background to-muted/30 relative"
+      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-background to-muted/30 relative"
     >
       <div className="p-4 space-y-6">
+
         {messages.map((message, index) => (
           <MessageBubble
             key={index}
@@ -946,66 +872,46 @@ function ChatMessages({
             isUser={message.senderType === 'USER'}
           />
         ))}
-        
-        {showLeadForm && hasMultipleMessages && !hasSubmittedLead && !loading && (
-          <div className="flex justify-center animate-in fade-in zoom-in-95">
-            <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-4 max-w-md w-full">
-              <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <UserPlus className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm mb-1">Ready to get started?</h4>
-                  <p className="text-xs text-muted-foreground mb-3">Share your details and we'll help you get the best solution.</p>
-                  <button 
-                    onClick={showLeadForm} 
-                    className="w-full py-2 px-4 rounded-lg hover:opacity-90 transition-colors text-sm font-medium flex items-center justify-center gap-2 cursor-pointer"
-                    style={{
-                      backgroundColor: theme?.inputButtonColor || "#DD692E",
-                      color: "#ffffff"
-                    }}
-                  >
-                    <CheckCircle2 className="h-4 w-4" /> Get Started Now
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+
+        {/* Lead nudge card appears after the first full exchange */}
+        {onLeadAction && hasMultipleMessages && !hasSubmittedLead && !loading && (
+          <LeadCard />
         )}
 
-        {loading && status === 'submitted' && <LoadingState statusType="submitted" text="Thinking" />}
-        {loading && status === 'streaming' && <LoadingState statusType="streaming" text="Searching..." showSmallAvatar />}
-        
+        {loading && status === 'submitted' && <LoadingDots text="Thinking" />}
+        {loading && status === 'streaming' && <LoadingDots text="Searching…" small />}
+
+        {/* Quick suggestions — only shown before first user message */}
         {!hasUserMessages && quickQuestions.length > 0 && (
           <div className="mt-8 animate-in fade-in delay-300">
             <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
               <Zap className="h-3 w-3" /> Quick suggestions
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {quickQuestions.map((question, index) => (
+              {quickQuestions.map((q, i) => (
                 <button
-                  key={index}
-                  onClick={() => onQuickQuestion(question)}
+                  key={i}
+                  onClick={() => onQuickQuestion(q)}
                   disabled={loading}
                   className="group text-left p-3 rounded-xl border transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:opacity-50 cursor-pointer"
-                  style={{ 
-                    animationDelay: `${index * 50}ms`,
-                    backgroundColor: quickSuggestionBg,
-                    color: quickSuggestionText,
-                  }}
+                  style={{ backgroundColor: suggBg, color: suggText }}
                 >
-                  <span className="text-sm font-medium group-hover:opacity-80">{question}</span>
+                  <span className="text-sm font-medium group-hover:opacity-80">{q}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} className="h-4" />
       </div>
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatInput
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface ChatInputProps {
   text: string;
@@ -1013,133 +919,139 @@ interface ChatInputProps {
   loading: boolean;
   isMicrophoneOn: boolean;
   browserSupportsSpeechRecognition: boolean;
-  onSubmit: (e?: React.FormEvent, overrideText?: string) => Promise<void>;
+  onSubmit: (e?: React.FormEvent) => Promise<void>;
   onNewChat: () => void;
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onToggleMicrophone: () => void;
-  hasLeadForm?: boolean;
-  onShowLeadForm?: () => void;
-  isLoadingLeadConfig?: boolean;
+  hasLeadForm: boolean;
+  onLeadAction: () => void;
+  isLoadingLeadConfig: boolean;
+  isAwaitingLeadAnswer: boolean;
+  isConversationalMode: boolean;
   chatbot?: any;
 }
 
 function ChatInput({
-  text,
-  setText,
-  loading,
-  isMicrophoneOn,
-  browserSupportsSpeechRecognition,
-  onSubmit,
-  onNewChat,
-  status,
-  inputRef,
-  onToggleMicrophone,
-  hasLeadForm,
-  onShowLeadForm,
-  isLoadingLeadConfig,
-  chatbot,
+  text, setText, loading, isMicrophoneOn, browserSupportsSpeechRecognition,
+  onSubmit, onNewChat, status, inputRef, onToggleMicrophone,
+  hasLeadForm, onLeadAction, isLoadingLeadConfig,
+  isAwaitingLeadAnswer, isConversationalMode, chatbot,
 }: ChatInputProps) {
+  const accentColor = chatbot?.theme?.inputButtonColor || '#DD692E';
+  const [showPicker, setShowPicker] = useState(false);
 
-  const theme = chatbot?.theme;
-  const inputButtonColor = theme?.inputButtonColor || "#DD692E";
-
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onSubmit(e);
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setText(text + emojiData.emoji);
   };
 
   return (
-    <div className="border-t bg-background p-3">
-      <PromptInput onSubmit={handleFormSubmit}>
+      <div className="border-t border-black/5 bg-white/80 backdrop-blur-xl px-4 py-4 shrink-0 relative">
+
+      {/* 1. Responsive Picker Container */}
+      {showPicker && (
+        <div className="absolute bottom-full left-0 w-full z-50 animate-in fade-in slide-in-from-bottom-2">
+          <div className="flex flex-col border-t bg-card shadow-2xl">
+
+            {/* 2. Custom Picker Header with Close Option */}
+            <div className="flex items-center justify-between p-2 border-b bg-muted/50">
+              <span className="text-xs font-medium px-2">Select Emoji</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 rounded-full"
+                onClick={() => setShowPicker(false)}
+              >
+                <XIcon className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* 3. Dynamic Width/Height Picker */}
+            <Picker
+              onEmojiClick={onEmojiClick}
+              autoFocusSearch={false}
+              width="100%"
+              height="60vh"
+              previewConfig={{ showPreview: false }} // Hides large emoji preview to save space
+              skinTonesDisabled
+              searchPlaceHolder="Search..."
+            />
+          </div>
+        </div>
+      )}
+
+      <PromptInput
+        onSubmit={async (e: React.FormEvent) => {
+          e.preventDefault();
+          // Ensure picker closes on message send
+          setShowPicker(false);
+          await onSubmit(e);
+        }}
+      >
         <div className="flex items-end gap-2">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <PromptInputTextarea
               ref={inputRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Type your message here..."
+              onChange={e => setText(e.target.value)}
+              placeholder={isAwaitingLeadAnswer ? 'Type your answer…' : 'Type your message here…'}
               disabled={loading || isMicrophoneOn}
               className="min-h-12 max-h-32 text-[13px]"
               rows={1}
             />
+
             <PromptInputToolbar>
               <PromptInputTools>
-                {/* Lead Form Button */}
-                {hasLeadForm && onShowLeadForm && !isLoadingLeadConfig && (
-                  <PromptInputButton
-                    size="sm"
-                    variant="ghost"
-                    onClick={onShowLeadForm}
-                    title="Get started"
-                    className="text-[11px] hover:opacity-80 cursor-pointer"
-                    style={{ color: inputButtonColor }}
-                    disabled={loading}
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Get Started</span>
-                  </PromptInputButton>
-                )}
-                
+                {/* 4. Emoji Toggle - Added type="button" to prevent auto-submit */}
+                <PromptInputButton
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowPicker(!showPicker);
+                  }}
+                  className={showPicker ? 'bg-muted' : ''}
+                >
+                  <SmilePlus className="h-4 w-4" />
+                </PromptInputButton>
+
+                {/* Voice & Other Actions */}
                 {browserSupportsSpeechRecognition && (
                   <PromptInputButton
+                    type="button"
                     size="sm"
                     variant="ghost"
                     onClick={onToggleMicrophone}
-                    title={isMicrophoneOn ? "Stop voice input" : "Start voice input"}
-                    className={`cursor-pointer ${isMicrophoneOn ? "bg-destructive/10 text-destructive" : ""}`}
-                    disabled={loading}
+                    className={isMicrophoneOn ? 'bg-destructive/10 text-destructive' : ''}
                   >
-                    {isMicrophoneOn ? (
-                      <>
-                        <MicOffIcon className="h-4 w-4" />
-                        <span className="hidden sm:inline">Listening...</span>
-                      </>
-                    ) : (
-                      <>
-                        <MicIcon className="h-4 w-4" />
-                        <span className="hidden sm:inline">Voice</span>
-                      </>
-                    )}
+                    {isMicrophoneOn ? <MicOffIcon className="h-4 w-4" /> : <MicIcon className="h-4 w-4" />}
                   </PromptInputButton>
                 )}
+
                 <PromptInputButton
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={onNewChat}
-                  title="New chat"
-                  className="text-[11px] hover:bg-primary/10 cursor-pointer"
-                  disabled={loading}
                 >
                   <RefreshCw className="h-4 w-4" />
-                  <span className="hidden sm:inline">New Chat</span>
                 </PromptInputButton>
               </PromptInputTools>
             </PromptInputToolbar>
           </div>
+
           <PromptInputSubmit
             size="icon"
             disabled={(!text.trim() && !isMicrophoneOn) || loading}
             status={status}
-            className="h-12 w-12 rounded-xl cursor-pointer"
-            style={{ backgroundColor: inputButtonColor, color: '#ffffff' }}
+            className="h-12 w-12 rounded-full m-1 shadow-lg hover:scale-105 transition-all"
+            style={{ backgroundColor: accentColor, color: '#ffffff' }}
           >
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
           </PromptInputSubmit>
         </div>
       </PromptInput>
-      
-      {/* Loading indicator for lead config */}
-      {isLoadingLeadConfig && (
-        <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Loading form configuration...
-        </div>
-      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-// hooks/useChatbot.ts
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useConversationalLead, ConversationalLeadConfig } from './useConversationalLead';
 import { Message } from '@/types/chat';
 
 interface ChatbotData {
@@ -22,6 +22,10 @@ interface ChatbotData {
 interface UseChatbotProps {
   chatbotId: string;
   initialChatbotData?: ChatbotData;
+  /** Pass the lead form config to enable conversational lead collection */
+  conversationalLeadConfig?: ConversationalLeadConfig | null;
+  /** Called when lead is fully collected */
+  onLeadCollected?: (data: Record<string, string>) => void;
 }
 
 interface UseChatbotReturn {
@@ -37,7 +41,15 @@ interface UseChatbotReturn {
   conversationId: string | null;
   hasLoadedInitialMessages: boolean;
   quickQuestions: string[];
+  mode: 'streaming' | 'standard';
+  setMode: (mode: 'streaming' | 'standard') => void;
   handleSubmit: (e?: React.FormEvent, overrideText?: string) => Promise<void>;
+  /** Start conversational lead collection (replaces modal showLeadForm) */
+  startLeadCollection: () => void;
+  /** True while the bot is waiting for a lead field answer */
+  isAwaitingLeadAnswer: boolean;
+  /** Current lead collection status */
+  leadCollectionStatus: 'idle' | 'collecting' | 'submitting' | 'done' | 'error';
   handleQuickQuestion: (question: string) => Promise<void>;
   handleNewChat: () => void;
   formatTime: (date?: Date) => string;
@@ -47,7 +59,19 @@ interface UseChatbotReturn {
   chatContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): UseChatbotReturn {
+// Simple timer utility
+function timer(label: string) {
+  const start = performance.now();
+  return {
+    end: () => {
+      const ms = (performance.now() - start).toFixed(1);
+      console.log(`⏱️ [${label}]: ${ms}ms`);
+      return parseFloat(ms);
+    }
+  };
+}
+
+export function useChatbot({ chatbotId, initialChatbotData, conversationalLeadConfig, onLeadCollected }: UseChatbotProps): UseChatbotReturn {
   const [chatbot, setChatbot] = useState<ChatbotData | null>(initialChatbotData || null);
   const [isLoadingChatbot, setIsLoadingChatbot] = useState(!initialChatbotData);
   const [chatbotError, setChatbotError] = useState<string | null>(null);
@@ -60,48 +84,54 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [hasLoadedInitialMessages, setHasLoadedInitialMessages] = useState<boolean>(false);
   const [quickQuestions, setQuickQuestions] = useState<string[]>([]);
+  const [mode, setMode] = useState<'streaming' | 'standard'>('standard');
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+
+  // ── Conversational lead: inject a BOT message directly into chat ──────────
+  const onBotMessage = useCallback((content: string) => {
+    setMessages(prev => [...prev, {
+      senderType: 'BOT',
+      content,
+      createdAt: new Date(),
+    }]);
+  }, []);
+
+  const conversationalLead = useConversationalLead({
+    chatbotId,
+    conversationId,
+    config: conversationalLeadConfig ?? null,
+    onBotMessage,
+    onLeadCollected,
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Function to load existing conversation messages
   const loadConversationMessages = useCallback(async (conversationId: string) => {
+    const t = timer('loadConversationMessages');
     try {
       const response = await fetch(`/api/conversations/${conversationId}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
-      console.log("Load conversation response status:", response.status);
-      
       if (response.status === 404) {
-        console.log('Conversation not found in DB');
         localStorage.removeItem(`chatbot_${chatbotId}_conversation`);
         setConversationId(null);
         showWelcomeMessage();
         return;
       }
-      
+
       if (response.ok) {
-        const messages = await response.json();
-        console.log("Loaded conversation messages:", messages);
-        
-        if (Array.isArray(messages) && messages.length > 0) {
-          // Format messages from API response
-          const formattedMessages = messages.map((msg: any) => ({
+        const msgs = await response.json();
+        if (Array.isArray(msgs) && msgs.length > 0) {
+          setMessages(msgs.map((msg: any) => ({
             senderType: msg.senderType,
             content: msg.content,
             createdAt: new Date(msg.createdAt),
-          }));
-          
-          setMessages(formattedMessages);
-          console.log(`Loaded ${formattedMessages.length} existing messages`);
+          })));
         } else {
-          // Empty conversation - show welcome message
-          console.log('Conversation exists but is empty');
           showWelcomeMessage();
         }
       } else {
@@ -113,57 +143,44 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
       setConversationId(null);
       showWelcomeMessage();
     } finally {
+      t.end();
       setHasLoadedInitialMessages(true);
     }
   }, [chatbotId]);
 
-  // Function to show welcome message
   const showWelcomeMessage = useCallback(() => {
     if (!chatbot) return;
-    
-    const welcomeMessage: Message = {
+    setMessages([{
       senderType: 'BOT',
       content: chatbot.greeting || "👋 Hello! How can I help you today?",
       createdAt: new Date(),
-    };
-    setMessages([welcomeMessage]);
+    }]);
     setHasLoadedInitialMessages(true);
   }, [chatbot]);
 
-  // Fetch chatbot data
   const fetchChatbotData = useCallback(async () => {
     if (!chatbotId) return;
-    
+    const t = timer('fetchChatbotData');
     setIsLoadingChatbot(true);
     setChatbotError(null);
-    
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/chatbots/${chatbotId}`,
         { cache: 'no-store' }
       );
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch chatbot: ${response.status}`);
-      }
-      
+      if (!response.ok) throw new Error(`Failed to fetch chatbot: ${response.status}`);
       const data = await response.json();
       setChatbot(data);
-      
-      if (data.suggestions && Array.isArray(data.suggestions)) {
-        setQuickQuestions(data.suggestions);
-      } else {
-        setQuickQuestions([
-          "How can you help me?",
-          "What are your features?",
-          "Tell me about pricing",
-          "How do I get started?",
-        ]);
-      }
+      setQuickQuestions(
+        data.suggestions?.length
+          ? data.suggestions
+          : ["How can you help me?", "What are your features?", "Tell me about pricing", "How do I get started?"]
+      );
     } catch (error) {
       console.error('Error fetching chatbot:', error);
       setChatbotError(error instanceof Error ? error.message : 'Failed to load chatbot');
     } finally {
+      t.end();
       setIsLoadingChatbot(false);
     }
   }, [chatbotId]);
@@ -173,172 +190,255 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
       fetchChatbotData();
     } else if (initialChatbotData) {
       setChatbot(initialChatbotData);
-      if (initialChatbotData.suggestions) {
-        setQuickQuestions(initialChatbotData.suggestions);
-      }
+      if (initialChatbotData.suggestions) setQuickQuestions(initialChatbotData.suggestions);
       setIsLoadingChatbot(false);
     }
   }, [chatbotId, initialChatbotData, fetchChatbotData]);
 
-  // Initialize chat - load existing conversation if it exists
   useEffect(() => {
     if (!chatbot) return;
-    
-    // Check if there's an existing conversation in localStorage
     const savedConversationId = localStorage.getItem(`chatbot_${chatbotId}_conversation`);
-    
     if (savedConversationId) {
-      console.log('Found existing conversation, loading messages:', savedConversationId);
       setConversationId(savedConversationId);
-      // Load existing conversation messages
       loadConversationMessages(savedConversationId);
     } else {
-      // No existing conversation - show welcome message
-      console.log('No existing conversation, showing welcome message');
       showWelcomeMessage();
     }
-    
   }, [chatbot, chatbotId, loadConversationMessages, showWelcomeMessage]);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     if (hasLoadedInitialMessages) {
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'nearest'
-        });
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 100);
     }
   }, [messages, loading, hasLoadedInitialMessages]);
 
-  // Focus input when chat opens
   useEffect(() => {
     if (inputRef.current && hasLoadedInitialMessages) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 300);
+      setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [hasLoadedInitialMessages]);
 
-  // Handle form submission - Conversation created automatically by API
-  const handleSubmit = async (e?: React.FormEvent, overrideText?: string) => {
-    if (e) e.preventDefault();
-    
-    const searchQuery = (overrideText || text).trim();
-    if (!searchQuery) {
-      setError('Please enter a message');
-      return;
-    }
+  const sendMessage = useCallback(async (searchQuery: string) => {
+    console.group(`🚀 sendMessage [mode=${mode}] — "${searchQuery.substring(0, 40)}..."`);
+    const tSubmit = timer('sendMessage [total including UI updates]');
 
-    // Add user message
-    const userMessage: Message = { 
-      senderType: 'USER', 
-      content: searchQuery,
-      createdAt: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-
+    setMessages(prev => [...prev, { senderType: 'USER', content: searchQuery, createdAt: new Date() }]);
     setLoading(true);
     setStatus('submitted');
     setError('');
-    
     setText('');
-    
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
+    setTimeout(() => inputRef.current?.focus(), 50);
+
+    if (mode === 'streaming') {
+      await handleStreamingSubmit(searchQuery);
+    } else {
+      await handleStandardSubmit(searchQuery);
+    }
+
+    tSubmit.end();
+    console.groupEnd();
+  }, [mode]);
+
+  useEffect(() => {
+    if (conversationalLead.status === 'done' && pendingMessage) {
+      const timer = setTimeout(() => {
+        sendMessage(pendingMessage);
+        setPendingMessage(null);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [conversationalLead.status, pendingMessage, sendMessage]);
+
+  const handleStreamingSubmit = async (searchQuery: string) => {
+    const tTotal = timer('handleStreamingSubmit [total]');
+
+    setMessages(prev => [...prev, {
+      senderType: 'BOT',
+      content: '...',
+      createdAt: new Date(),
+    }]);
 
     try {
-      const requestData = {
-        message: searchQuery,
-        conversationId, // Might be null - that's fine!
-        chatbotId,
-      };
-
-      const response = await fetch('/api/chat', {
+      const tFetch = timer('streaming: fetch /api/chat/stream');
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: searchQuery, conversationId, chatbotId }),
       });
+      tFetch.end();
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error! status: ${response.status}`);
       }
 
+      const newConversationId = response.headers.get('X-Conversation-Id');
+      if (newConversationId && newConversationId !== conversationId) {
+        setConversationId(newConversationId);
+        localStorage.setItem(`chatbot_${chatbotId}_conversation`, newConversationId);
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      setStatus('streaming');
+
+      const tStream = timer('streaming: reading stream chunks');
+      let chunkCount = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        chunkCount++;
+        const chunk = decoder.decode(value, { stream: true });
+        accumulated += chunk;
+
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            senderType: 'BOT',
+            content: accumulated,
+            createdAt: new Date(),
+          };
+          return updated;
+        });
+      }
+
+      const streamMs = tStream.end();
+      console.log(`   └─ chunks received: ${chunkCount}, total chars: ${accumulated.length}`);
+
+      setStatus('ready');
+      setLoading(false);
+
+    } catch (err) {
+      console.error('Streaming error:', err);
+      setStatus('error');
+      setLoading(false);
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          senderType: 'BOT',
+          content: 'Sorry, I encountered an error. Please try again.',
+          createdAt: new Date(),
+        };
+        return updated;
+      });
+      setError(err instanceof Error ? err.message : 'Failed to send message.');
+      setTimeout(() => setStatus('ready'), 3000);
+    } finally {
+      tTotal.end();
+    }
+  };
+
+  const handleStandardSubmit = async (searchQuery: string) => {
+    const tTotal = timer('handleStandardSubmit [total]');
+
+    try {
+      const tFetch = timer('standard: fetch /api/chat');
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: searchQuery, conversationId, chatbotId }),
+      });
+      tFetch.end();
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const tParse = timer('standard: parse JSON response');
       const data = await response.json();
-      
-      // Update conversationId from response (it might be newly created)
+      tParse.end();
+
+      console.log('Chat response:', data);
+
       if (data.conversationId && data.conversationId !== conversationId) {
         setConversationId(data.conversationId);
         localStorage.setItem(`chatbot_${chatbotId}_conversation`, data.conversationId);
-        console.log('Created/updated conversation:', data.conversationId);
       }
-      
+
       setStatus('streaming');
-      
-      const assistantMessage: Message = {
+      setMessages(prev => [...prev, {
         senderType: 'BOT',
         content: data.message || data.response,
-        createdAt: new Date()
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+        createdAt: new Date(),
+      }]);
 
       setTimeout(() => {
         setStatus('ready');
         setLoading(false);
       }, 500);
 
-    } catch (error) {
-      console.error('Chat error:', error);
+    } catch (err) {
+      console.error('Chat error:', err);
       setStatus('error');
       setLoading(false);
-      
-      const errorMessage: Message = {
+      setMessages(prev => [...prev, {
         senderType: 'BOT',
         content: 'Sorry, I encountered an error. Please try again.',
-        createdAt: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-      
-      setError(error instanceof Error ? error.message : 'Failed to send message. Please try again.');
-      
-      setTimeout(() => {
-        setStatus('ready');
-      }, 3000);
+        createdAt: new Date(),
+      }]);
+      setError(err instanceof Error ? err.message : 'Failed to send message. Please try again.');
+      setTimeout(() => setStatus('ready'), 3000);
+    } finally {
+      tTotal.end();
     }
   };
 
-  // Handle quick question
+  const handleSubmit = async (e?: React.FormEvent, overrideText?: string) => {
+    if (e) e.preventDefault();
+    const searchQuery = (overrideText || text).trim();
+    if (!searchQuery) { setError('Please enter a message'); return; }
+
+    // ── Conversational lead intercept ────────────────────────────────────────
+    // If we're mid-lead-collection, let the lead hook consume this message.
+    // We still show the user's message in chat, but skip the AI call.
+    if (conversationalLead.isAwaitingLeadAnswer) {
+      // Show user message in chat
+      setMessages(prev => [...prev, { senderType: 'USER', content: searchQuery, createdAt: new Date() }]);
+      setText('');
+      setTimeout(() => inputRef.current?.focus(), 50);
+      // Let lead hook handle the reply (it will call onBotMessage for the next question)
+      await conversationalLead.handleUserMessage(searchQuery);
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // ── Auto-start lead collection if needed ────────────────────────────────
+    // If conversational lead config exists and hasn't started collecting yet,
+    // intercept the message to ask lead questions first
+    if (conversationalLeadConfig && conversationalLead.status === 'idle') {
+      setPendingMessage(searchQuery);
+      setText('');
+      setTimeout(() => inputRef.current?.focus(), 50);
+      conversationalLead.startLeadCollection();
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    await sendMessage(searchQuery);
+  };
+
   const handleQuickQuestion = async (question: string) => {
     if (loading) return;
-    
     setText(question);
     await handleSubmit(undefined, question);
   };
 
-  // Handle new chat - Just reset UI, don't create conversation yet
   const handleNewChat = () => {
-    // Clear localStorage
     localStorage.removeItem(`chatbot_${chatbotId}_conversation`);
-    
-    // Reset state
     setConversationId(null);
     setText('');
     setError('');
     setStatus('ready');
     setMessages([]);
-    
-    // Show welcome message again
     showWelcomeMessage();
-    
-    // Focus input
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const formatTime = (date?: Date) => {
@@ -346,9 +446,7 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const refetchChatbot = async () => {
-    await fetchChatbotData();
-  };
+  const refetchChatbot = async () => { await fetchChatbotData(); };
 
   return {
     chatbot,
@@ -363,9 +461,14 @@ export function useChatbot({ chatbotId, initialChatbotData }: UseChatbotProps): 
     conversationId,
     hasLoadedInitialMessages,
     quickQuestions,
+    mode,
+    setMode,
     handleSubmit,
     handleQuickQuestion,
     handleNewChat,
+    startLeadCollection: conversationalLead.startLeadCollection,
+    isAwaitingLeadAnswer: conversationalLead.isAwaitingLeadAnswer,
+    leadCollectionStatus: conversationalLead.status,
     formatTime,
     refetchChatbot,
     messagesEndRef,
