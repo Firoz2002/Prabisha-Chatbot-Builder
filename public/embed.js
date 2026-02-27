@@ -92,11 +92,7 @@
 
   async function createIframe() {
     iframe = document.createElement('iframe');
-    // Permissions string must follow feature-policy syntax (no wildcards).
-    // Browsers ignore invalid declarations, which would prevent microphone access.
-    const permissions = "microphone; camera; autoplay; clipboard-write; encrypted-media; fullscreen; geolocation; gyroscope; magnetometer; midi; payment; picture-in-picture; speaker-selection; usb; web-share";
-    iframe.allow = permissions;
-    iframe.setAttribute('allow', permissions);
+    iframe.setAttribute('allow', 'microphone *; camera *; speaker-selection *');
 
     // Build iframe URL with diagnostic query params so the widget can display
     // a clear message when the embedding host blocks microphone via policy.
